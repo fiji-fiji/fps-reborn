@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FPS Reborn</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hurt"></div>
+    <div id="haze"></div>
+    <div id="scope"></div>
+    <div id="markers"></div>
+    <canvas id="minimap"></canvas>
+
+    <!-- match bar: your team vs the enemy, sides, round timer, who's still in -->
+    <div id="score" class="box">
+      <div class="side">
+        <span class="team blue">YOUR DOGS</span><span class="role" id="roleA"></span>
+        <div class="alive" id="aliveA"></div>
+      </div>
+      <span class="num blue" id="scoreA">0</span>
+      <div class="mid"><div id="timer">1:40</div><div id="roundNo"></div></div>
+      <span class="num red" id="scoreB">0</span>
+      <div class="side">
+        <span class="team red">ENEMY CATS</span><span class="role" id="roleB"></span>
+        <div class="alive" id="aliveB"></div>
+      </div>
+    </div>
+
+    <div id="feed"></div>
+    <div id="scoreboard" class="box"></div>
+    <div id="hurtDir"></div>
+    <div id="banner"><div id="bannerTitle"></div><div id="bannerSub"></div></div>
+    <div id="outMsg" class="box">
+      <div class="big">POP!</div>
+      <div>You got popped by <b id="outBy"></b></div>
+      <div class="small" id="outWhen"></div>
+    </div>
+    <div id="spectate" class="box"></div>
+
+    <div id="crosshair">
+      <div class="ch ch-top"></div>
+      <div class="ch ch-bottom"></div>
+      <div class="ch ch-left"></div>
+      <div class="ch ch-right"></div>
+      <div class="ch-dot"></div>
+    </div>
+    <div id="hitmarker">
+      <div></div><div></div><div></div><div></div>
+    </div>
+    <div id="dmgText"></div>
+    <div id="drawBar"><div id="drawFill"></div></div>
+
+    <div id="action"><div id="actionLabel"></div><div class="bar"><div id="actionFill"></div></div></div>
+    <div id="hint"></div>
+
+    <div id="money" class="box">🪙 <span id="moneyNum">0</span> <span id="moneyGain"></span></div>
+    <div id="healthBox" class="box">
+      <div class="statLabel">HEALTH</div>
+      <div class="statRow"><span class="heart">&#9829;</span><span id="health">100</span><span id="shieldBadge"></span></div>
+      <div class="statBar"><div id="healthFill"></div></div>
+    </div>
+    <div id="carry" class="box">&#10047; YOU HAVE THE SEED</div>
+
+    <div id="slots"></div>
+    <div id="ammoBox" class="box">
+      <div id="weaponName">Bloom Blaster</div>
+      <div><span id="ammo">25</span><span class="reserve"> / <span id="reserve">75</span></span></div>
+      <div class="statLabel" id="ammoLabel">BUBBLES</div>
+      <div id="reloadBar"><div id="reloadFill"></div></div>
+    </div>
+    <div id="dazzle"></div>
+  </div>
+
+  <!-- Shop -->
+  <div id="shop">
+    <div class="shopPanel box">
+      <div class="shopHead">
+        <h2>🛒 Shop</h2>
+        <div><div id="shopMoney"></div><div id="shopTimer"></div></div>
+      </div>
+      <div class="shopSection">BLASTERS (you also always have the free Dandelion)</div>
+      <div class="shopGrid" id="shopGrid"></div>
+      <div class="shopSection">SHIELDS (extra protection on top of your health)</div>
+      <div class="shopGrid" id="shopShields"></div>
+      <div class="shopSection">UTILITY (press <kbd>5</kbd> to hold one, <kbd>Click</kbd> to throw far, <kbd>Right-click</kbd> to throw short)</div>
+      <div class="shopGrid" id="shopUtility"></div>
+      <div class="shopFoot">Click a card to buy it. Changed your mind? Buying another one gives your money back.
+        <br><button id="shopDone" class="pickBtn">Done <kbd>B</kbd></button></div>
+    </div>
+  </div>
+
+  <!-- Start / pause menu -->
+  <div id="menu">
+    <div class="panel">
+      <h1>FPS REBORN</h1>
+      <div class="sub" id="menuSub"></div>
+
+      <div class="howto">
+        <h3>How to play</h3>
+        <ul>
+          <li>You're a fluffy dog on the <b style="color:#5aa8ff">blue team</b>. Pop the <b style="color:#ff5a5a">red team</b> of cats with bubbles!</li>
+          <li><b>Attacking:</b> carry the seed to site <b>A</b> or <b>B</b> and hold <kbd>E</kbd> to plant it.</li>
+          <li><b>Defending:</b> stop them, or hold <kbd>E</kbd> next to their tree to uproot it.</li>
+          <li>Win rounds to earn coins, then press <kbd>B</kbd> at the start of a round to shop.</li>
+          <li>First team to <b>13 rounds</b> wins. Follow the floating labels if you're lost!</li>
+        </ul>
+      </div>
+
+      <div class="pickLabel">MAP</div>
+      <div class="pick" data-param="map">
+        <button data-value="oasis">Oasis</button>
+        <button data-value="paris">Petit Paris</button>
+        <button data-value="garden">Practice Garden</button>
+      </div>
+      <div class="pickLabel">MODE</div>
+      <div class="pick" data-param="mode">
+        <button data-value="standard">Standard (rounds)</button>
+        <button data-value="skirmish">Skirmish (respawns)</button>
+      </div>
+      <div class="pickLabel">BOTS</div>
+      <div class="pick" data-param="bots">
+        <button data-value="easy">Easy</button>
+        <button data-value="normal">Normal</button>
+        <button data-value="hard">Hard</button>
+      </div>
+      <button id="playBtn">CLICK TO PLAY</button>
+      <div class="setting">
+        <label for="sens">Mouse sensitivity <span id="sensVal">1.00</span></label>
+        <input type="range" id="sens" min="0.1" max="5" step="0.05" value="1">
+        <label for="vol" style="margin-top:.6rem">Sound volume</label>
+        <input type="range" id="vol" min="0" max="1" step="0.05" value="0.7">
+        <label for="music" style="margin-top:.6rem">Music volume (<kbd>M</kbd> turns it on/off)</label>
+        <input type="range" id="music" min="0" max="1" step="0.05" value="0.5">
+      </div>
+      <div class="controls">
+        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</div>
+        <div><kbd>Mouse</kbd> look around</div>
+        <div><kbd>Click</kbd> blow bubbles</div>
+        <div><kbd>Right-click</kbd> zoom (Lily)</div>
+        <div><kbd>Space</kbd> jump</div>
+        <div><kbd>Shift</kbd> walk quietly</div>
+        <div><kbd>C</kbd> crouch</div>
+        <div><kbd>R</kbd> refill bubbles</div>
+        <div><kbd>E</kbd> hold to plant / uproot</div>
+        <div><kbd>B</kbd> shop</div>
+        <div><kbd>1</kbd> main blaster · <kbd>2</kbd> sidearm</div>
+        <div><kbd>3</kbd> knife · <kbd>4</kbd> the seed</div>
+        <div><kbd>5</kbd> grenades (press again to switch)</div>
+        <div><kbd>Q</kbd> swap main / sidearm</div>
+        <div><kbd>M</kbd> music on / off</div>
+        <div><kbd>Tab</kbd> scoreboard</div>
+        <div><kbd>Esc</kbd> pause</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="lib/three.min.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/maps.js"></script>
+  <script src="js/decor.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/weapons.js"></script>
+  <script src="js/character.js"></script>
+  <script src="js/dummy.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/bot.js"></script>
+  <script src="js/booboo.js"></script>
+  <script src="js/projectiles.js"></script>
+  <script src="js/grenades.js"></script>
+  <script src="js/sassy.js"></script>
+  <script src="js/plantanim.js"></script>
+  <script src="js/music.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/hud.js"></script>
+  <script src="js/shop.js"></script>
+  <script src="js/barriers.js"></script>
+  <script src="js/modes.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

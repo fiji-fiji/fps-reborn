@@ -1,0 +1,373 @@
+/* Friendly, readable UI. Everything is sized in rem, and 1rem grows with the
+   window, so text stays big and clear on any screen. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: clamp(15px, 1.15vw, 22px); }
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: "Arial Rounded MT Bold", "Avenir Next", "Nunito", "Helvetica Neue", system-ui, sans-serif;
+  color: #fff;
+  user-select: none;
+}
+
+:root {
+  --pink: #ff8fb1;
+  --teal: #4fc3d9;
+  --blue: #5aa8ff;
+  --red: #ff5a5a;
+  --mint: #7fffd4;
+  --gold: #ffd23f;
+  --panel: rgba(18, 22, 34, .62);
+  --panel-border: rgba(255, 255, 255, .22);
+  --shadow: 0 .12rem 0 rgba(0,0,0,.6);
+}
+
+#game {
+  display: block;
+  width: 100vw; height: 100vh;
+
+}
+
+/* keyboard key badge, used in hints and menus: <kbd>E</kbd> */
+kbd {
+  display: inline-block; min-width: 1.6em; padding: .05em .45em;
+  background: #fff; color: #1b1f27; border-radius: .35em;
+  border-bottom: .18em solid #b9c0cc;
+  font-family: inherit; font-weight: bold; font-size: .9em; text-align: center;
+  text-shadow: none; line-height: 1.3;
+}
+
+.box {
+  background: var(--panel);
+  border: .12rem solid var(--panel-border);
+  border-radius: .7rem;
+}
+
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; text-shadow: var(--shadow); }
+
+#minimap {
+  position: absolute; left: 1rem; top: 1rem;
+  border: .2rem solid rgba(255,255,255,.4);
+  border-radius: .6rem;
+  background: rgba(0,0,0,.3);
+}
+
+/* match bar (top centre): your team vs enemy, timer, round, who's alive */
+#score {
+  position: absolute; top: .8rem; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 1rem;
+  padding: .5rem 1.2rem;
+}
+#score .side { display: flex; flex-direction: column; align-items: center; gap: .25rem; min-width: 7rem; }
+#score .team { font-size: .85rem; letter-spacing: .05em; }
+#score .role { font-size: .75rem; color: #e8e8e8; background: rgba(255,255,255,.12); border-radius: 1rem; padding: .05rem .6rem; }
+#score .num { font-size: 2.3rem; min-width: 2.2rem; text-align: center; }
+#score .blue { color: var(--blue); }
+#score .red { color: var(--red); }
+#score .mid { text-align: center; min-width: 6rem; }
+#timer { font-size: 1.9rem; }
+#timer.low { color: var(--gold); }
+#timer.planted { color: var(--mint); }
+#roundNo { font-size: .7rem; color: #ccc; letter-spacing: .08em; }
+.alive { display: flex; gap: .25rem; }
+.alive i { display: block; width: .7rem; height: .7rem; border-radius: 50%; border: .1rem solid rgba(0,0,0,.6); }
+.alive i.blue { background: var(--blue); }
+.alive i.red { background: var(--red); }
+.alive i.gone { background: #444; }
+
+/* big round banners */
+#banner {
+  position: absolute; left: 50%; top: 20%; transform: translateX(-50%);
+  display: none; text-align: center;
+  width: min(54rem, calc(100vw - 2rem));
+  text-shadow: 0 .2rem 0 #000, 0 0 1rem rgba(0,0,0,.5);
+}
+#bannerTitle { font-size: 3.2rem; letter-spacing: .06em; }
+#bannerSub { font-size: 1.3rem; color: #fff; margin-top: .4rem; }
+
+/* what to do next (big friendly pill) + plant/uproot progress */
+#hint {
+  position: absolute; left: 50%; bottom: 7.5rem; transform: translateX(-50%);
+  display: none; padding: .55rem 1.3rem; border-radius: 2rem;
+  background: rgba(18, 22, 34, .7); border: .15rem solid var(--mint);
+  font-size: 1.15rem; color: #fff; white-space: nowrap;
+}
+#action {
+  position: absolute; left: 50%; top: calc(50% + 3.5rem); transform: translateX(-50%);
+  display: none; width: 18rem; text-align: center; font-size: 1.1rem;
+}
+#action .bar { height: .8rem; border-radius: 1rem; overflow: hidden; background: rgba(0,0,0,.55); border: .12rem solid rgba(255,255,255,.5); margin-top: .35rem; }
+#actionFill { height: 100%; width: 0; background: var(--mint); }
+#carry {
+  position: absolute; left: 1rem; bottom: 8.2rem; display: none;
+  padding: .35rem .8rem; border-color: var(--mint); color: var(--mint); font-size: 1rem;
+}
+#spectate {
+  position: absolute; left: 50%; bottom: 11rem; transform: translateX(-50%);
+  display: none; padding: .45rem 1.1rem; font-size: 1.05rem;
+}
+#spectate b { color: var(--blue); }
+
+/* pop feed (top right) */
+#feed { position: absolute; top: 1rem; right: 1rem; display: flex; flex-direction: column; gap: .35rem; align-items: flex-end; }
+.feedRow { background: var(--panel); border-radius: .5rem; padding: .3rem .8rem; font-size: 1rem; }
+.feedRow .pop { color: #ddd; margin: 0 .35rem; }
+
+/* soft pink flash when you get hit + arrow toward who hit you */
+#hurt {
+  position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(255,143,177,0) 55%, rgba(255,143,177,.6) 100%);
+}
+#hurtDir {
+  position: absolute; left: 50%; top: 50%; opacity: 0;
+  width: 0; height: 0;
+  border-left: 1rem solid transparent; border-right: 1rem solid transparent;
+  border-bottom: 1.5rem solid var(--pink);
+  filter: drop-shadow(0 0 .15rem #000);
+  transition: opacity .3s;
+}
+
+/* "you got popped" */
+#outMsg {
+  position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
+  display: none; text-align: center; font-size: 1.25rem;
+  padding: 1rem 2rem; border-color: rgba(255,143,177,.7);
+}
+#outMsg .big { font-size: 3rem; color: var(--pink); }
+#outMsg b { color: var(--red); }
+#outMsg .small { color: #ddd; margin-top: .3rem; font-size: 1rem; }
+
+/* markers floating over places to go (sites, the seed, the tree) */
+#markers { position: absolute; inset: 0; }
+.marker {
+  position: absolute; transform: translate(-50%, -100%);
+  display: flex; flex-direction: column; align-items: center;
+  font-size: .95rem; white-space: nowrap;
+}
+.marker .tag {
+  min-width: 2.2rem; padding: .15rem .55rem; border-radius: .6rem;
+  background: rgba(18, 22, 34, .7); border: .15rem solid currentColor; text-align: center;
+  font-size: 1.15rem;
+}
+.marker .dist { font-size: .75rem; color: #fff; margin-top: .1rem; }
+.marker .pin { width: 0; height: 0; border-left: .45rem solid transparent; border-right: .45rem solid transparent; border-top: .6rem solid currentColor; }
+.marker.edge .pin { display: none; }
+
+/* crosshair */
+#crosshair { position: absolute; left: 50%; top: 50%; }
+.ch, .ch-dot {
+  position: absolute;
+  background: #5dffc0;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.75);
+}
+.ch-dot { width: 4px; height: 4px; left: -2px; top: -2px; border-radius: 1px; }
+.ch-top, .ch-bottom { width: 3px; height: 9px; left: -1.5px; }
+.ch-left, .ch-right { width: 9px; height: 3px; top: -1.5px; }
+
+#hitmarker { position: absolute; left: 50%; top: 50%; opacity: 0; }
+#hitmarker div {
+  position: absolute; width: 3px; height: 11px;
+  background: #fff; left: -1.5px; top: -5.5px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.5);
+}
+#hitmarker div:nth-child(1) { transform: rotate(45deg)  translateY(-13px); }
+#hitmarker div:nth-child(2) { transform: rotate(135deg) translateY(-13px); }
+#hitmarker div:nth-child(3) { transform: rotate(225deg) translateY(-13px); }
+#hitmarker div:nth-child(4) { transform: rotate(315deg) translateY(-13px); }
+#hitmarker.head div { background: var(--gold); }
+#hitmarker.kill div { background: var(--pink); }
+
+#dmgText {
+  position: absolute; left: 50%; top: calc(50% + 1.8rem);
+  transform: translateX(-50%);
+  font-size: 1.3rem; opacity: 0;
+}
+
+/* health + shield (bottom left) */
+#healthBox {
+  position: absolute; left: 1rem; bottom: 1rem;
+  padding: .5rem 1rem; min-width: 13rem;
+}
+.statLabel { font-size: .7rem; color: #ddd; letter-spacing: .08em; }
+.statRow { display: flex; align-items: center; gap: .5rem; }
+#healthBox .heart { font-size: 1.8rem; color: var(--pink); }
+#health { font-size: 2.3rem; }
+#shieldBadge { font-size: 1rem; color: #9fe3ff; display: none; }
+.statBar { height: .45rem; border-radius: 1rem; background: rgba(255,255,255,.18); overflow: hidden; margin-top: .25rem; }
+#healthFill { height: 100%; width: 100%; background: var(--pink); }
+
+/* money (above health) */
+#money {
+  position: absolute; left: 1rem; bottom: 6.3rem;
+  padding: .25rem .8rem; font-size: 1.15rem; color: var(--gold); display: none;
+}
+#moneyGain { color: var(--mint); margin-left: .4rem; opacity: 0; }
+
+/* bow pull meter (under the crosshair) */
+#drawBar {
+  position: absolute; left: 50%; top: calc(50% + 2rem); transform: translateX(-50%);
+  width: 6rem; height: .5rem; border-radius: 1rem; overflow: hidden; display: none;
+  background: rgba(0,0,0,.5); border: .1rem solid rgba(255,255,255,.6);
+}
+#drawFill { height: 100%; width: 0; background: var(--pink); }
+
+/* Lily zoom: dark ring around a clear circle + thin cross */
+#scope {
+  position: absolute; inset: 0; display: none;
+  background:
+    linear-gradient(#5dffc0, #5dffc0) center / 2px 40% no-repeat,
+    linear-gradient(#5dffc0, #5dffc0) center / 40% 2px no-repeat,
+    radial-gradient(circle at center, transparent 0, transparent 38vh, rgba(8,10,16,.92) 38.3vh);
+}
+.pickBtn {
+  margin-top: .6rem; font-family: inherit; font-size: 1.1rem; cursor: pointer;
+  background: var(--mint); color: #10141a; border: none; border-radius: .7rem; padding: .45rem 1.4rem;
+  border-bottom: .25rem solid #2a9c70;
+}
+
+/* bubbles / ammo + weapon slots (bottom right) */
+#ammoBox {
+  position: absolute; right: 1rem; bottom: 1rem;
+  padding: .5rem 1rem; text-align: right; min-width: 13rem;
+}
+#weaponName { font-size: 1rem; color: #fff; }
+#ammo { font-size: 2.3rem; }
+#ammoBox .reserve { font-size: 1.2rem; color: #ccc; }
+#reloadBar { height: .45rem; border-radius: 1rem; background: rgba(255,255,255,.18); margin-top: .25rem; visibility: hidden; overflow: hidden; }
+#reloadFill { height: 100%; width: 0; background: var(--mint); }
+#slots { position: absolute; right: 1rem; bottom: 7.2rem; display: flex; flex-direction: column; gap: .3rem; align-items: flex-end; }
+.slot { padding: .2rem .7rem; font-size: .9rem; color: #ccc; border-radius: .5rem; background: rgba(18,22,34,.5); }
+.slot.on { color: #fff; background: rgba(18,22,34,.8); outline: .12rem solid var(--mint); }
+
+/* ---------- Shop ---------- */
+#shop {
+  position: fixed; inset: 0; display: none;
+  align-items: center; justify-content: center;
+  background: rgba(10, 14, 20, .55);
+}
+#shop.open { display: flex; }
+#shop .shopPanel { width: min(60rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; padding: 1.2rem 1.4rem; }
+#shop .shopHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: .8rem; gap: 1rem; }
+#shop h2 { font-size: 1.8rem; color: var(--mint); }
+#shopMoney { font-size: 1.6rem; color: var(--gold); }
+#shopTimer { font-size: .95rem; color: #ddd; }
+.shopGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .7rem; }
+.card {
+  text-align: left; cursor: pointer; font-family: inherit; color: #fff;
+  background: rgba(40, 46, 64, .85); border: .15rem solid rgba(255,255,255,.18); border-radius: .8rem;
+  padding: .7rem .8rem; display: flex; flex-direction: column; gap: .3rem;
+}
+.card:hover { border-color: var(--mint); }
+.card .top { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.card .name { font-size: 1.1rem; }
+.card .price { font-size: 1.1rem; color: var(--gold); }
+.card .desc { font-size: .8rem; color: #ddd; }
+.card .swatch { height: .35rem; border-radius: 1rem; }
+.card .bars { display: grid; grid-template-columns: auto 1fr; gap: .15rem .5rem; align-items: center; font-size: .7rem; color: #ccc; }
+.card .bars span { height: .35rem; border-radius: 1rem; background: rgba(255,255,255,.15); position: relative; overflow: hidden; }
+.card .bars span i { position: absolute; inset: 0; background: var(--mint); }
+.card.cant { opacity: .4; cursor: not-allowed; }
+.card.owned { border-color: var(--gold); }
+.card.owned .price::after { content: '  ✓ yours'; color: var(--mint); font-size: .8rem; }
+.shopSection { font-size: .85rem; color: #aaa; letter-spacing: .08em; margin: .9rem 0 .4rem; }
+.shopFoot { margin-top: .9rem; font-size: .95rem; color: #ddd; text-align: center; }
+
+/* ---------- Menu ---------- */
+#menu {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 14, 20, .72);
+}
+#menu.hidden { display: none; }
+.panel {
+  background: #1b1f27;
+  border: .25rem solid #3a4150;
+  border-radius: 1.2rem;
+  padding: 1.5rem 1.8rem;
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem); overflow: auto;
+  text-align: center;
+}
+.panel h1 { font-size: 2.4rem; letter-spacing: .1em; color: var(--mint); text-shadow: 0 .2rem 0 #000; }
+.panel .sub { color: #bbb; margin: .3rem 0 1rem; font-size: .95rem; }
+.howto {
+  text-align: left; background: rgba(255,255,255,.05); border-radius: .8rem;
+  padding: .8rem 1rem; margin-bottom: 1rem; font-size: .95rem; line-height: 1.5;
+}
+.howto h3 { font-size: 1rem; color: var(--mint); margin-bottom: .3rem; }
+.howto li { margin-left: 1.1rem; }
+.pickLabel { text-align: left; font-size: .8rem; color: #999; margin: .3rem 0 .3rem; letter-spacing: .08em; }
+.pick { display: flex; gap: .5rem; margin-bottom: .5rem; }
+.pick button {
+  flex: 1;
+  font-family: inherit; font-size: 1rem;
+  background: #2a303c; color: #ddd;
+  border: .15rem solid #3a4150; border-radius: .6rem; padding: .45rem; cursor: pointer;
+}
+.pick button.active { border-color: var(--mint); color: var(--mint); }
+.pick.disabled { opacity: .35; pointer-events: none; }
+#playBtn {
+  margin-top: .6rem;
+  font-family: inherit; font-size: 1.4rem;
+  background: var(--mint); color: #10141a;
+  border: none; border-bottom: .3rem solid #2a9c70; border-radius: .8rem;
+  padding: .7rem 1.5rem; cursor: pointer; width: 100%;
+}
+#playBtn:hover { background: #aaffe4; }
+.setting { margin: 1rem 0 .6rem; text-align: left; }
+.setting label { display: block; margin-bottom: .3rem; color: #ddd; }
+.setting input { width: 100%; }
+.controls {
+  display: grid; grid-template-columns: 1fr 1fr; gap: .4rem .8rem;
+  text-align: left; font-size: .9rem; color: #ccc;
+  margin-top: .6rem;
+}
+
+/* ---------- Grenade effects ---------- */
+/* Sparkle Pop: bright glittery screen */
+#dazzle {
+  position: absolute; inset: 0; opacity: 0;
+  background:
+    radial-gradient(circle at 30% 40%, rgba(255,230,107,.9) 0 2px, transparent 3px) 0 0 / 46px 46px,
+    radial-gradient(circle at 70% 60%, rgba(255,143,177,.9) 0 2px, transparent 3px) 0 0 / 58px 58px,
+    radial-gradient(ellipse at center, #ffffff 0%, #fff8e6 60%, #ffe3ef 100%);
+}
+/* standing inside a Cloud Puff */
+#haze { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(250,250,255,.92), rgba(240,236,255,1)); }
+
+/* Tab scoreboard */
+#scoreboard {
+  position: absolute; left: 50%; top: 18%; transform: translateX(-50%);
+  display: none; padding: 1rem 1.4rem; min-width: 30rem;
+}
+#scoreboard table { width: 100%; border-collapse: collapse; margin-bottom: .8rem; font-size: 1.05rem; }
+#scoreboard th { text-align: left; font-size: .8rem; color: #ccc; letter-spacing: .08em; padding: .2rem .5rem; }
+#scoreboard td { padding: .25rem .5rem; border-top: .08rem solid rgba(255,255,255,.12); }
+#scoreboard tr.out td { opacity: .45; }
+#scoreboard tr.me td { background: rgba(127,255,212,.12); }
+
+/* ---------- Shop open: nothing else on screen, solid panel ---------- */
+body.shopping #hud { display: none; }
+#shop {
+  background: rgba(10, 14, 20, .8);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+#shop .shopPanel { background: #1d2230; border-color: #3a4150; }
+/* tighter shop layout so it fits without scrolling */
+#shop .shopPanel { padding: .9rem 1.2rem; scrollbar-width: thin; }
+#shop .shopHead { margin-bottom: .4rem; }
+#shop .shopSection { margin: .55rem 0 .3rem; }
+#shop .shopGrid { gap: .5rem; }
+#shop .card { padding: .5rem .7rem; gap: .2rem; }
+#shop .card .bars { gap: .08rem .5rem; }
+#shop .shopFoot { margin-top: .55rem; }
+#shop .pickBtn { margin-top: .35rem; }
+
+/* pop feed weapon icons */
+.feedRow { display: flex; align-items: center; gap: .1rem; }
+.wicon { image-rendering: pixelated; vertical-align: middle; filter: drop-shadow(0 .08rem 0 rgba(0,0,0,.7)); }
+.headIcon { color: var(--gold); margin-left: .3rem; }
