@@ -48,44 +48,61 @@ class SassyHand {
   constructor(camera) {
     this.camera = camera;
     const lam = (c, e = 0) => new THREE.MeshLambertMaterial({ color: c, emissive: e });
-    const skin = lam(0xf2c6a0), gold = lam(0xffd36b, 0x403010);
+    // a big fluffy paw: white fur, pink beans, pink painted claws, a gold bracelet + ring
+    const furTex = Textures.noisyTexture(0xffffff, 14, 8, 41);
+    const skin = new THREE.MeshLambertMaterial({ map: furTex, color: BICHON.fur, emissive: DOG_GLOW });
+    const fluff = new THREE.MeshLambertMaterial({ map: furTex, color: BICHON.fur, emissive: DOG_GLOW, flatShading: true });
+    const gold = lam(0xffd36b, 0x403010), bean = lam(PAW.bean, 0x3a1020);
     this.nailMat = lam(0xff3d8b, 0x551030);
-    this.paintMat = lam(0xff3d8b, 0x551030);           // the nail that gets repainted
+    this.paintMat = lam(0xff3d8b, 0x551030);           // the claw that gets repainted
     const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 20, 8, 43), color: PAW.sleeve });   // team sleeve
     const add = (parent, w, h, d, m, x, y, z) => {
-      const b = new THREE.Mesh(roundedBoxGeometry(w, h, d, Math.min(w, h, d) * 0.35, 3), m);
+      const b = new THREE.Mesh(roundedBoxGeometry(w, h, d, Math.min(w, h, d) * 0.45, 3), m);
       b.position.set(x, y, z);
       parent.add(b);
       return b;
     };
+    if (!PUFF_GEO) PUFF_GEO = new THREE.IcosahedronGeometry(1, 1);
+    const puff = (parent, r, x, y, z) => { const m = new THREE.Mesh(PUFF_GEO, fluff); m.scale.setScalar(r); m.position.set(x, y, z); parent.add(m); return m; };
     const piv = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
 
-    // the hand: fingers point up, the back of the hand (with the nails) faces you
+    // the paw: toes point up, the back of the paw (with the claws) faces you, beans face away
     this.root = new THREE.Group();
-    this.root.scale.setScalar(0.75);                  // the left hand is a bit smaller than the right
+    this.root.scale.setScalar(0.75);                  // the left paw is a bit smaller than the right
     this.root.visible = false;
     camera.add(this.root);
     const R = this.root;
-    add(R, 0.06, 0.065, 0.02, skin, 0, 0, 0);                         // palm
+    add(R, 0.08, 0.072, 0.04, skin, 0, 0, 0);                         // the chubby paw
+    add(R, 0.038, 0.03, 0.006, bean, 0, -0.008, -0.021);              // big pad
+    for (const [x, y, r] of [[0.03, 0.012, 0.016], [-0.03, 0.014, 0.017], [0, -0.016, 0.018], [0.018, -0.02, 0.014], [-0.022, -0.012, 0.015]]) {
+      puff(R, r, x, y, 0.017);                                        // fluff on the back of the paw
+    }
     this.fingers = [];
-    const xs = [0.0215, 0.007, -0.007, -0.0215], lens = [1, 1.1, 1, 0.82];
+    const xs = [0.027, 0.009, -0.009, -0.027], lens = [1, 1.1, 1, 0.85];
     xs.forEach((x, i) => {
       const k = piv(R, x, 0.0325, 0);
-      add(k, 0.0135, 0.03 * lens[i], 0.015, skin, 0, 0.015 * lens[i], 0);
+      add(k, 0.02, 0.03 * lens[i], 0.026, skin, 0, 0.015 * lens[i], 0);       // fat toe
       const m = piv(k, 0, 0.03 * lens[i], 0);
-      add(m, 0.013, 0.026 * lens[i], 0.014, skin, 0, 0.013 * lens[i], 0);
-      const nail = add(m, 0.011, 0.014, 0.003, i === 0 ? this.paintMat : this.nailMat, 0, 0.016 * lens[i], 0.0085);
-      if (i === 2) add(k, 0.016, 0.006, 0.018, gold, 0, 0.012, 0);      // gold ring
+      add(m, 0.019, 0.024 * lens[i], 0.025, skin, 0, 0.012 * lens[i], 0);
+      puff(m, 0.01, 0, 0.004, 0.012);                                         // a tuft on each toe
+      add(m, 0.013, 0.011, 0.005, bean, 0, 0.01 * lens[i], -0.013);           // toe bean
+      const nail = add(m, 0.011, 0.014, 0.006, i === 0 ? this.paintMat : this.nailMat, 0, 0.02 * lens[i], 0.01);   // painted claw
+      if (i === 2) add(k, 0.024, 0.006, 0.03, gold, 0, 0.012, 0);      // gold ring
       this.fingers.push({ k, m, nail });
     });
-    const tb = piv(R, 0.029, -0.012, 0.002);
-    add(tb, 0.015, 0.026, 0.015, skin, 0, 0.013, 0);
+    const tb = piv(R, 0.036, -0.012, 0.002);                          // dewclaw
+    add(tb, 0.02, 0.026, 0.022, skin, 0, 0.013, 0);
     const tt = piv(tb, 0, 0.026, 0);
-    add(tt, 0.014, 0.022, 0.014, skin, 0, 0.011, 0);
-    add(tt, 0.011, 0.012, 0.003, this.nailMat, 0, 0.014, 0.008);
+    add(tt, 0.019, 0.02, 0.021, skin, 0, 0.01, 0);
+    add(tt, 0.011, 0.012, 0.006, this.nailMat, 0, 0.014, 0.01);
     this.thumb = { b: tb, t: tt };
-    add(R, 0.066, 0.012, 0.026, gold, 0, -0.038, 0);                  // bracelet
-    add(R, 0.07, 0.12, 0.03, sleeve, 0, -0.104, 0);                   // sleeve
+    add(R, 0.084, 0.014, 0.046, gold, 0, -0.04, 0);                   // bracelet
+    add(R, 0.078, 0.05, 0.044, skin, 0, -0.066, 0);                   // fluffy forearm
+    for (let k = 0; k < 7; k++) {                                     // fur bursting out of the sleeve
+      const a = (k / 7) * Math.PI * 2;
+      puff(R, 0.016, Math.cos(a) * 0.04, -0.092, Math.sin(a) * 0.022);
+    }
+    add(R, 0.086, 0.11, 0.05, sleeve, 0, -0.15, 0);                   // team sleeve
 
     // props
     this.file = add(R, 0.11, 0.009, 0.012, lam(0xf3c9a6, 0x221510), 0, 0.09, 0.012);   // nail file
@@ -256,8 +273,8 @@ class SassyHand {
     const V = (x, y, z) => new THREE.Vector3(x, y, z);
     // where the jar is right now (the camera sits at the origin, so this is screen space)
     vm.group.updateMatrixWorld(true);
-    const jar = vm.group.localToWorld(V(0, JAR.y + JAR.r, 0.03));
-    const jarR = JAR.r * vm.group.scale.x;
+    const jar = vm.group.localToWorld(vm.jarCenter.clone());
+    const jarR = vm.jarRadius * vm.group.scale.x;
     // put the hand so that `local` (a point on the hand) sits on `target`
     const reachTo = (target, local) => {
       R.position.set(0, 0, 0);

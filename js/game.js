@@ -9,6 +9,7 @@ const BOT_NAMES = {
   red: ['Whiskers', 'Mittens', 'Pumpkin', 'Shadow', 'Tiger'],
 };
 const MAX_MONEY = 9000;
+const v3 = v => [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)];   // a vector, small, for sending
 
 // ---- loadouts: every character has a main slot, a sidearm, and a shield ----
 function resetLoadout(e) {
@@ -91,7 +92,8 @@ class PlayerAgent {
 
 class Game {
   // modeName: 'standard' | 'swiftplay' | 'skirmish' (maps without team spawns use practice)
-  constructor({ scene, world, mapInfo, effects, camera, difficulty = 'easy', modeName = 'standard' }) {
+  // net (LAN play, see net.js): { role: 'host'|'guest', myId, players: [{ id, name, team }], noBots }
+  constructor({ scene, world, mapInfo, effects, camera, difficulty = 'easy', modeName = 'standard', net = null }) {
     Object.assign(this, { scene, world, mapInfo, effects, camera });
     this.time = 0;
     this.playerTeam = 'blue';
@@ -100,24 +102,47 @@ class Game {
     this.arrows = new Arrows(this);
     this.throwables = new Throwables(this);
     this.drops = new Drops(this);
-
-    this.player = new PlayerAgent(this);
-    this.entities.push(this.player);
-
-    this.dummies = (mapInfo.buddies || []).map(([x, y, z, s]) => new Dummy(scene, x, y, z, s));
-    this.entities.push(...this.dummies);
-
+    this.net = null;                     // set by NetHost / NetGuest once the game exists
+    this.isGuest = !!net && net.role === 'guest';
+    this.firstAttack = (net && net.firstAttack) || null;   // a friend's game: the side the host's game drew
+    this.remotes = [];                   // the other human (LAN play)
     this.bots = [];
-    if (mapInfo.spawns) {
+
+    if (net && mapInfo.spawns) {
+      // LAN: both computers build the same line-up in the same order (so ids, hats and
+      // colours match). You are 'H' on the host; each friend has their own id.
       this.nav = new NavGrid(world, mapInfo.spawn.y);
-      let seed = 1;
-      for (const team of ['blue', 'red']) {
-        BOT_NAMES[team].forEach((name, i) => {
-          const shirt = TEAM_SHIRTS[team][(i + (team === this.playerTeam ? 1 : 0)) % 5];
-          const bot = new Bot(this, name, team, shirt, difficulty, seed++);
-          this.bots.push(bot);
-          this.entities.push(bot);
-        });
+      const roster = netRoster(net), localId = net.myId;
+      this.playerTeam = roster.find(r => r.id === localId).team;
+      roster.forEach((r, i) => {
+        const shirt = TEAM_SHIRTS[r.team][r.teamIdx % 5];
+        let e;
+        if (r.id === localId) { e = this.player = new PlayerAgent(this); }
+        else if (r.human) { e = new RemoteHuman(this, r.name, r.team, shirt, i + 1); this.remotes.push(e); }
+        else { e = new Bot(this, r.name, r.team, shirt, difficulty, i + 1); this.bots.push(e); }
+        e.netId = r.id;
+        this.entities.push(e);
+      });
+      this.dummies = [];
+    } else {
+      this.player = new PlayerAgent(this);
+      this.entities.push(this.player);
+      this.dummies = (mapInfo.buddies || []).map(([x, y, z, s]) => new Dummy(scene, x, y, z, s));
+      this.entities.push(...this.dummies);
+    }
+
+    if (mapInfo.spawns) {
+      if (!net) {
+        this.nav = new NavGrid(world, mapInfo.spawn.y);
+        let seed = 1;
+        for (const team of ['blue', 'red']) {
+          BOT_NAMES[team].forEach((name, i) => {
+            const shirt = TEAM_SHIRTS[team][(i + (team === this.playerTeam ? 1 : 0)) % 5];
+            const bot = new Bot(this, name, team, shirt, difficulty, seed++);
+            this.bots.push(bot);
+            this.entities.push(bot);
+          });
+        }
       }
       // everyone gets their own hat, with a flower in their own player colour
       let hatN = 0;
@@ -134,7 +159,9 @@ class Game {
     }
   }
 
-  get hasTeams() { return this.bots.length > 0; }
+  get hasTeams() { return this.bots.length > 0 || this.remotes.length > 0; }
+  byNetId(id) { return this.entities.find(e => e.netId === id) || null; }
+  _ev(ev) { if (this.net && this.net.event) this.net.event(ev); }    // tell the guest (host only)
 
   // ---- buying ----
   // item: a WEAPONS key or a SHIELDS key. Things bought this buy phase are refunded
@@ -350,9 +377,21 @@ class Game {
         if (r && r.t < best) { best = r.t; target = e; part = hb.part; }
       }
     }
+    // a bot's first shot in a fight never lands on the head (getting one-tapped out of nowhere isn't fun)
+    if (!shooter.isPlayer && !shooter.isHuman) {
+      if (this.time - (shooter._lastShotT ?? -99) > 1.2) shooter._volleyT = this.time;
+      shooter._lastShotT = this.time;
+      if (part === 'head' && shooter._volleyT === this.time) part = 'body';
+    }
     const end = eye.clone().addScaledVector(dir, best);
     const from = muzzle || shooter.model.muzzlePosition(new THREE.Vector3());
     this.effects.bubbleTrail(from, end);
+    if (this.isGuest) {                            // the guest only draws it (and tells the host)
+      if (!target && wallHit) { this.effects.bubbleBurst(wallHit.point, wallHit.normal, 3, 1.2); this.effects.foamSpot(wallHit.point, wallHit.normal); }
+      if (shooter.isPlayer) this.net.out({ t: 'shot', eye: v3(eye), dir: v3(dir), k: def.key });
+      return;
+    }
+    this._ev({ t: 'shot', s: shooter.netId, a: v3(from), b: v3(end), k: def.key, n: !target && wallHit ? v3(wallHit.normal) : null });
 
     if (target) {
       const dmg = Math.round(def.damage[part] * gun.falloff(best));
@@ -365,7 +404,9 @@ class Game {
 
   // A shot, arrow or bubble bomb landed on someone. `weapon` = what did it (for the pop feed).
   applyHit(shooter, target, part, dmg, point, dir, weapon) {
+    if (this.mode.frozen || this.isGuest) return; // before GO, shots are just for practice (and the host decides hits)
     const out = target.takeHit(dmg, part, shooter);
+    this._ev({ t: 'hit', a: shooter.netId, v: target.netId, p: part, o: out, d: dmg, pt: v3(point), dir: v3(dir) });
     if (shooter.isPlayer) {
       HUD.hitmarker(part, out, dmg);
       if (out) Sound.kill(); else if (part === 'head') Sound.headshot(); else Sound.hit();
@@ -380,8 +421,10 @@ class Game {
 
   // Someone is out: burst them into pixels and tell the mode.
   // `attacker` is null when the Boo-Boo bloom got them.
-  pop(victim, attacker, part, weapon) {
+  pop(victim, attacker, part, weapon, fromNet = false) {
+    if (this.isGuest && !fromNet) return;           // on the guest, pops come from the host
     if (victim.alive) { victim.alive = false; victim.health = 0; }
+    this._ev({ t: 'pop', v: victim.netId, a: attacker ? attacker.netId : null, p: part, w: weapon });
     victim.actionHeld = false;
     if (victim.stats) victim.stats.outs++;
     if (attacker && attacker.stats && attacker.team !== victim.team) attacker.stats.pops++;
@@ -392,7 +435,13 @@ class Game {
     if (push.lengthSq() > 1e-6) push.normalize();
     this.effects.pixelBurst(victim.burst(), center, push, PIXEL * 0.95);
     Sound.at(center, 'shatter', this._volumeAt(center));
+    if (fromNet) { HUD.feed(attacker, victim, part === 'head', weapon); if (victim.isPlayer) HUD.showOut(attacker ? attacker.name : 'the blooming tree', null); return; }
     if (this.mode.kind !== 'practice') this.drops.drop(victim);   // their blaster falls to the ground
+    // remember where fights happen: bots keep their crosshair on these spots while moving
+    this.hotSpots = this.hotSpots || [];
+    this.hotSpots.push(victim.pos.clone());
+    if (attacker && attacker.pos && attacker.mover) this.hotSpots.push(attacker.pos.clone());
+    while (this.hotSpots.length > 40) this.hotSpots.shift();
     this.mode.onOut(victim, attacker, part, weapon);
     for (const b of this.bots) if (b.alive && b.onPopped) b.onPopped(victim, attacker);
   }
@@ -427,7 +476,7 @@ class Game {
       Sound.at(at, kind, this._volumeAt(at) * 1.15 * loud, surface);
     }
     // enemy bots nearby hear it too
-    for (const b of this.bots)
+    if (!this.isGuest) for (const b of this.bots)
       if (b.alive && b.team !== e.team && b.pos.distanceTo(m.pos) < 22) b.hear(m.pos.clone(), 'step', e);
   }
 
@@ -445,6 +494,10 @@ class Game {
   // A gunshot: everyone hears it (you in 3D), bots get to know roughly where it came from.
   shotHeard(shooter, pos, key) {
     if (!shooter.isPlayer) Sound.at(pos, 'shoot', this._volumeAt(pos), key);
+    // shooting gives you away: an enemy who fires near you shows as a red dot on your minimap
+    const me = this.player;
+    if (me && me.alive && shooter.team !== me.team && shooter.team !== 'buddy' && me.pos.distanceTo(pos) < 40)
+      shooter.spottedUntil = Math.max(shooter.spottedUntil || 0, this.time + 1.5);
     for (const b of this.bots)
       if (b.alive && b.team !== shooter.team && b.pos.distanceTo(pos) < 40) b.hear(pos.clone(), 'shot', shooter);
   }
@@ -476,6 +529,7 @@ class Game {
   }
 
   update(dt) {
+    if (this.isGuest) { this.net.update(dt); return; }   // the guest's world follows the host (net.js)
     this.time += dt;
     const frozen = this.mode.frozen;
     // holding the knife makes anyone move 1.5x faster
@@ -485,7 +539,9 @@ class Game {
     this.arrows.update(dt);
     this.throwables.update(dt);
     this.drops.update(dt);
+    for (const r of this.remotes) r.update(dt);
     for (const b of this.bots) if (b.alive) this.footsteps(b, dt);
+    for (const r of this.remotes) if (r.alive) this.footsteps(r, dt);
     this._separate();
     this.mode.update(dt);
   }

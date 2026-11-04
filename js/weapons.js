@@ -213,24 +213,62 @@ class Gun {
 
 // ---------------------------------------------------------------------------
 // Viewmodel: what you hold. One model per weapon (built the first time it's needed).
-// The round bubble jar on top of each blaster: a glass ball (radius r, bottom at y) a bit
-// longer front-to-back. The soapy liquid inside is a ball cut off flat at the fill level.
-const JAR = { r: 0.06, y: 0.04, stretch: 1.25 };
-const _jarGeoCache = new Map();
-function jarLiquidGeometry(frac) {
+// The bubble reservoir on top of each blaster: a piece of lab glassware, different for
+// every blaster, with coloured soap inside that drains as you shoot.
+//   pts    = the outside of the glass, [radius, height] from the bottom up (it's turned on a lathe)
+//   fill   = how high the liquid goes when full; mid/bodyR = the middle of the glass (refill shows aim there)
+//   stopper: 'cork' (a cork in the neck) or 'lid' (a little glass lid on a beaker); marks = measuring lines
+const JAR = { y: 0.04, z: 0.03 };      // where the glass stands on the stem
+function _ballBottom(r, n = 8, cy = r) {             // a round bottom: a half ball of radius r
+  const out = [];
+  for (let i = 0; i <= n; i++) { const a = -Math.PI / 2 + (i / n) * (Math.PI / 2); out.push([Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return out;
+}
+const VESSELS = {
+  // test tube, held in a little clamp
+  dandelion: { pts: [..._ballBottom(0.022), [0.022, 0.12], [0.026, 0.125]], fill: 0.1, mid: 0.06, bodyR: 0.024,
+    stopper: 'cork', neckR: 0.022, color: 0xa8ff60, clamp: true },
+  // Erlenmeyer flask: a wide flat bottom, a cone up to a narrow neck
+  tulip: { pts: [[0, 0], [0.058, 0], [0.062, 0.008], [0.044, 0.05], [0.026, 0.085], [0.018, 0.1], [0.018, 0.13], [0.022, 0.134]],
+    fill: 0.07, mid: 0.035, bodyR: 0.05, stopper: 'cork', neckR: 0.018, color: 0xff7ab8 },
+  // round-bottom flask: a big glass ball and a long neck
+  sunflower: { pts: (() => { const r = 0.066, out = [];
+      for (let i = 0; i <= 14; i++) { const a = -Math.PI / 2 + (i / 14) * (Math.PI * 0.87); out.push([Math.cos(a) * r, r + Math.sin(a) * r]); }
+      out.push([0.019, 0.15], [0.019, 0.178], [0.023, 0.182]); return out; })(),
+    fill: 0.1, mid: 0.066, bodyR: 0.066, stopper: 'cork', neckR: 0.019, color: 0xffb340 },
+  // beaker with a pouring spout, measuring lines, a glass lid
+  bloom: { pts: [[0, 0], [0.054, 0], [0.058, 0.006], [0.058, 0.108], [0.062, 0.112]], fill: 0.095, mid: 0.055, bodyR: 0.058,
+    stopper: 'lid', neckR: 0.062, color: 0xc77dff, marks: [0.03, 0.05, 0.07, 0.09], spout: true },
+  // tall graduated cylinder on a wide foot, measuring lines
+  lily: { pts: [[0, 0.012], [0.03, 0.012], [0.03, 0.2], [0.035, 0.205]], fill: 0.185, mid: 0.1, bodyR: 0.03,
+    stopper: 'cork', neckR: 0.03, color: 0x7fdcff, marks: [0.05, 0.08, 0.11, 0.14, 0.17], foot: true },
+};
+VESSELS.default = VESSELS.sunflower;
+
+// radius of the glass at height y (straight lines between the profile points)
+function vesselRadius(v, y) {
+  const p = v.pts;
+  if (y <= p[0][1]) return p[0][0];
+  for (let i = 1; i < p.length; i++) {
+    if (y <= p[i][1]) { const a = p[i - 1], b = p[i], k = (y - a[1]) / Math.max(1e-6, b[1] - a[1]); return a[0] + (b[0] - a[0]) * k; }
+  }
+  return p[p.length - 1][0];
+}
+// the liquid inside: the inside of the glass, cut off flat at the fill level
+function vesselLiquidGeometry(v, frac) {
   const q = Math.round(Math.max(0, Math.min(1, frac)) * 24) / 24;
-  if (_jarGeoCache.has(q)) return _jarGeoCache.get(q);
-  const r = JAR.r - 0.005, cy = JAR.r, bottom = cy - r;
-  const topY = bottom + Math.max(0.002, q * 2 * r);
+  v._geo = v._geo || new Map();
+  if (v._geo.has(q)) return v._geo.get(q);
+  const bottom = v.pts[0][1] + 0.004, topY = bottom + Math.max(0.002, q * (v.fill - bottom));
   const pts = [new THREE.Vector2(0, bottom)];
   const n = 14;
-  for (let i = 1; i <= n; i++) {
+  for (let i = 0; i <= n; i++) {
     const y = bottom + (topY - bottom) * (i / n);
-    pts.push(new THREE.Vector2(Math.sqrt(Math.max(0, r * r - (y - cy) * (y - cy))), y));
+    pts.push(new THREE.Vector2(Math.max(0.001, vesselRadius(v, y) - 0.005), y));
   }
   pts.push(new THREE.Vector2(0, topY));                 // flat surface on top
   const geo = new THREE.LatheGeometry(pts, 24);
-  _jarGeoCache.set(q, geo);
+  v._geo.set(q, geo);
   return geo;
 }
 function setJarLevel(vm, frac) {
@@ -238,7 +276,7 @@ function setJarLevel(vm, frac) {
   if (q === vm.liquidLevel) return;
   vm.liquidLevel = q;
   vm.liquid.visible = q > 0;
-  if (q > 0) vm.liquid.geometry = jarLiquidGeometry(q);
+  if (q > 0) vm.liquid.geometry = vesselLiquidGeometry(vm.vessel, q);
 }
 
 const INSPECT_TIME = 2.4;   // seconds the [Y] inspect takes
@@ -265,7 +303,7 @@ class Viewmodel {
     const key = gun.def.key;
     if (!this.models[key]) {
       const d = gun.def;
-      this.models[key] = d.bow ? this._buildBow() : d.melee ? this._buildKnife() : this._buildFlower(d.look);
+      this.models[key] = d.bow ? this._buildBow() : d.melee ? this._buildKnife() : this._buildFlower(d.look, key);
       this._addPaws(this.models[key]);
       this.camera.add(this.models[key].group);
     }
@@ -408,7 +446,7 @@ class Viewmodel {
 
   // A blocky flower: stem body, leaves, a petal head that blows bubbles,
   // and a bubble jar on top whose level shows how many shots are left.
-  _buildFlower(look) {
+  _buildFlower(look, key) {
     const vm = {};
     const g = vm.group = new THREE.Group();
     const lam = (hex, seed) => new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(hex, 18, 8, seed) });
@@ -439,28 +477,62 @@ class Viewmodel {
     }
     vm.muzzleZ = vm.head.position.z - 0.04;
 
-    // bubble jar: a round glass bulb with a cork + soapy liquid that drains as you shoot
-    const glass = new THREE.MeshLambertMaterial({ color: 0xe0f7ff, transparent: true, opacity: 0.35, depthWrite: false });
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(JAR.r, 24, 16), glass);
-    bulb.position.set(0, JAR.y + JAR.r, 0.03);
-    bulb.scale.z = JAR.stretch;
-    bulb.renderOrder = 1;                              // glass drawn after the liquid inside it
-    g.add(bulb);
-    const top = JAR.y + JAR.r * 2;
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.02, 16), glass);
-    neck.position.set(0, top - 0.002, 0.03);
-    neck.renderOrder = 1;
-    g.add(neck);
-    const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.022, 0.02, 16), new THREE.MeshLambertMaterial({ color: 0xffb3cf, emissive: 0x2a0a14 }));
-    cork.position.set(0, top + 0.014, 0.03);
+    // the reservoir: this blaster's own lab glass, with soap that drains as you shoot
+    const v = vm.vessel = VESSELS[key] || VESSELS.default;
+    const glass = new THREE.MeshLambertMaterial({ color: 0xe0f7ff, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
+    const jar = new THREE.Group();
+    jar.position.set(0, JAR.y, JAR.z);
+    g.add(jar);
+    const outline = v.pts.map(([r, y]) => new THREE.Vector2(Math.max(0.0005, r), y));
+    const body = new THREE.Mesh(new THREE.LatheGeometry(outline, 28), glass);
+    body.renderOrder = 1;                              // glass drawn after the liquid inside it
+    jar.add(body);
+    const top = v.pts[v.pts.length - 1][1];
+    const white = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x555555 });
+    for (const y of v.marks || []) {                   // measuring lines on the side facing you
+      const r = vesselRadius(v, y);
+      const mk = new THREE.Mesh(new THREE.BoxGeometry(y === v.marks[v.marks.length - 1] || v.marks.indexOf(y) % 2 ? 0.016 : 0.026, 0.0025, 0.002), white);
+      mk.position.set(-r * 0.42, y, r * 0.91);
+      mk.rotation.y = -0.44;
+      jar.add(mk);
+    }
+    if (v.spout) {                                     // the beaker's little pouring lip
+      const sp = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.008, 0.02), glass);
+      sp.position.set(0, top + 0.001, -v.neckR - 0.004);
+      sp.rotation.x = 0.4;
+      sp.renderOrder = 1;
+      jar.add(sp);
+    }
+    if (v.foot) {                                      // the graduated cylinder's wide foot
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.054, 0.012, 6), glass);
+      foot.position.y = 0.006;
+      foot.renderOrder = 1;
+      jar.add(foot);
+    }
+    if (v.clamp) {                                     // a little clamp holding the test tube up
+      const metal = new THREE.MeshLambertMaterial({ color: 0xc9d2dc, emissive: 0x15181c });
+      for (const y of [0.03, 0.085]) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.004, 6, 16), metal);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = y;
+        jar.add(ring);
+      }
+      add(jar, 0.008, 0.07, 0.008, metal, 0.028, 0.055, 0);
+    }
+    // the stopper: a pink cork in the neck, or a glass lid on the beaker
+    const cork = v.stopper === 'lid'
+      ? new THREE.Mesh(new THREE.CylinderGeometry(v.neckR + 0.006, v.neckR + 0.006, 0.006, 24), new THREE.MeshLambertMaterial({ color: 0xffb3cf, emissive: 0x2a0a14, transparent: true, opacity: 0.75 }))
+      : new THREE.Mesh(new THREE.CylinderGeometry(v.neckR + 0.004, v.neckR - 0.002, 0.022, 16), new THREE.MeshLambertMaterial({ color: 0xffb3cf, emissive: 0x2a0a14 }));
+    cork.position.set(0, JAR.y + top + (v.stopper === 'lid' ? 0.004 : 0.008), JAR.z);
     g.add(cork);
     vm.cork = cork;                                    // the "cork" refill pops it off and puts it back
     vm.corkHome = cork.position.clone();
-    vm.liquid = new THREE.Mesh(jarLiquidGeometry(1), new THREE.MeshLambertMaterial({ color: 0x7fdcff, emissive: 0x1d4f66 }));
-    vm.liquid.position.set(0, JAR.y, 0.03);
-    vm.liquid.scale.z = JAR.stretch;
+    const liquidColor = new THREE.Color(v.color);
+    vm.liquid = new THREE.Mesh(vesselLiquidGeometry(v, 1), new THREE.MeshLambertMaterial({ color: liquidColor, emissive: liquidColor.clone().multiplyScalar(0.25) }));
+    jar.add(vm.liquid);
     vm.liquidLevel = 1;
-    g.add(vm.liquid);
+    vm.jarCenter = new THREE.Vector3(0, JAR.y + v.mid, JAR.z);   // the refill shows aim at these
+    vm.jarRadius = v.bodyR;
 
     // little bubble puff when shooting
     vm.flash = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6),
@@ -481,20 +553,25 @@ class Viewmodel {
   // Left hand (painted nails, sleeve, bracelet) holding a soap bottle, used for refilling.
   _buildHand(vm) {
     const lam = (hex, o = {}) => new THREE.MeshLambertMaterial({ color: hex, ...o });
-    // a hand with painted nails, a gold bracelet and a team sleeve
-    const skin = lam(HAND_SKIN), nail = lam(0xff3d8b, { emissive: 0x551030 });
+    // a big fluffy paw (white fur, pink beans + painted claws, gold bracelet) in a team sleeve
+    const furTex = Textures.noisyTexture(0xffffff, 14, 8, 41);
+    const skin = new THREE.MeshLambertMaterial({ map: furTex, color: BICHON.fur, emissive: DOG_GLOW });
+    const fluff = new THREE.MeshLambertMaterial({ map: furTex, color: BICHON.fur, emissive: DOG_GLOW, flatShading: true });
+    const nail = lam(0xff3d8b, { emissive: 0x551030 }), bean = lam(PAW.bean, { emissive: 0x3a1020 });
     const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 20, 8, 43), color: PAW.sleeve });
     const gold = lam(0xffd36b, { emissive: 0x403010 });
     const bottleMat = lam(0xfff1a6, { emissive: 0x2a2410 });
     const cap = lam(0xffffff);
     const add = (...a) => this._box(...a);
+    if (!PUFF_GEO) PUFF_GEO = new THREE.IcosahedronGeometry(1, 1);
+    const puff = (parent, r, x, y, z) => { const m = new THREE.Mesh(PUFF_GEO, fluff); m.scale.setScalar(r); m.position.set(x, y, z); parent.add(m); return m; };
 
     // hand = the wrist point. The forearm hangs off it and stays put;
-    // the grip (hand + bottle) turns around the wrist to pour.
+    // the grip (paw + bottle) turns around the wrist to pour.
     const hand = new THREE.Group();
     const grip = new THREE.Group();          // pivots at the wrist
     hand.add(grip);
-    const held = new THREE.Group();          // bottle + hand, centred on the bottle
+    const held = new THREE.Group();          // bottle + paw, centred on the bottle
     held.position.set(0.047, 0.04, 0);
     grip.add(held);
 
@@ -502,21 +579,29 @@ class Viewmodel {
     add(held, BW, 0.085, BW, bottleMat, 0, 0, 0);
     add(held, 0.022, 0.02, 0.022, cap, 0, 0.052, 0);
     vm.spout = add(held, 0.012, 0.016, 0.012, cap, 0, 0.07, 0);
-    add(held, 0.022, 0.075, 0.06, skin, -BW / 2 - 0.011, -0.004, 0);   // palm
-    for (let i = 0; i < 4; i++) {                                       // fingers + painted nails
-      const y = 0.026 - i * 0.017;
-      const len = i === 3 ? 0.04 : 0.05;
-      add(held, len, 0.014, 0.014, skin, -BW / 2 + len / 2 - 0.006, y, BW / 2 + 0.007);
-      add(held, 0.009, 0.012, 0.004, nail, -BW / 2 + len - 0.01, y, BW / 2 + 0.0155);
+    add(held, 0.036, 0.09, 0.074, skin, -BW / 2 - 0.016, -0.004, 0);   // the chubby paw
+    for (const [y, z, r] of [[0.03, -0.03, 0.02], [0, -0.038, 0.021], [-0.03, -0.03, 0.02], [0.044, 0.008, 0.018], [-0.044, 0.01, 0.019]]) {
+      puff(held, r, -BW / 2 - 0.03, y, z);                              // fluff on the back of the paw
     }
-    add(held, 0.04, 0.016, 0.016, skin, -0.008, 0.02, -BW / 2 - 0.008);   // thumb
+    for (let i = 0; i < 4; i++) {                                       // fat toes round the bottle, beans + claws
+      const y = 0.03 - i * 0.02;
+      const len = i === 3 ? 0.042 : 0.05;
+      add(held, len, 0.024, 0.026, skin, -BW / 2 + len / 2 - 0.01, y, BW / 2 + 0.012);
+      add(held, 0.012, 0.012, 0.004, bean, -BW / 2 + len / 2 - 0.004, y, BW / 2 + 0.0005);
+      add(held, 0.01, 0.012, 0.007, nail, -BW / 2 + len - 0.01, y, BW / 2 + 0.026);
+    }
+    add(held, 0.044, 0.026, 0.026, skin, -0.008, 0.022, -BW / 2 - 0.012);   // dewclaw
 
-    const arm = new THREE.Group();                                      // wrist, bracelet, sleeve
+    const arm = new THREE.Group();                                      // wrist, bracelet, fluffy forearm, sleeve
     arm.rotation.set(-0.75, 0, -0.3);
     hand.add(arm);
-    add(arm, 0.045, 0.06, 0.045, skin, 0, -0.025, 0);
-    add(arm, 0.05, 0.012, 0.05, gold, 0, -0.05, 0);
-    add(arm, 0.06, 0.3, 0.06, sleeve, 0, -0.2, 0);
+    add(arm, 0.066, 0.07, 0.066, skin, 0, -0.03, 0);
+    add(arm, 0.07, 0.014, 0.07, gold, 0, -0.05, 0);
+    for (let k = 0; k < 7; k++) {                                       // fur bursting out of the sleeve
+      const a = (k / 7) * Math.PI * 2;
+      puff(arm, 0.02, Math.cos(a) * 0.036, -0.075, Math.sin(a) * 0.036);
+    }
+    add(arm, 0.075, 0.3, 0.075, sleeve, 0, -0.22, 0);
 
     hand.scale.setScalar(0.68);                       // the left hand is a bit smaller than the right
     hand.visible = false;
@@ -526,14 +611,14 @@ class Viewmodel {
 
     const streamGeo = new THREE.BoxGeometry(0.012, 1, 0.012);
     streamGeo.translate(0, -0.5, 0); // hangs down from its top
-    vm.stream = new THREE.Mesh(streamGeo, lam(0x7fdcff, { emissive: 0x1d4f66, transparent: true, opacity: 0.8 }));
+    vm.stream = new THREE.Mesh(streamGeo, lam(vm.vessel.color, { emissive: new THREE.Color(vm.vessel.color).multiplyScalar(0.25), transparent: true, opacity: 0.8 }));   // same colour as the glass's soap
     vm.stream.visible = false;
     vm.group.add(vm.stream);
 
-    vm.handPour = new THREE.Vector3(-0.088, 0.27, 0.03);
+    vm.jarTopY = vm.corkHome.y + 0.012;                 // top of the stopper
+    vm.handPour = new THREE.Vector3(-0.088, vm.jarTopY + 0.086, 0.03);
     vm.handAway = new THREE.Vector3(-0.55, -0.35, 0.3);
     vm.pourTilt = -1.7;
-    vm.jarTopY = JAR.y + JAR.r * 2 + 0.024;   // top of the cork
   }
 
   // Frosting knife: pink handle, silver blade, a dollop of pink frosting with sprinkles.

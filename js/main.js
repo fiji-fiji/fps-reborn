@@ -1,7 +1,8 @@
 // Sets everything up and runs the game loop.
 // Settings come from the address bar: ?map=barcelona&mode=standard&bots=easy
+// LAN play (net.js): ?lan=host on the host; a friend opening the shared link is the guest.
 
-(() => {
+(async () => {
   const canvas = document.getElementById('game');
 
   // --- renderer: full resolution, smooth edges, soft sun shadows (clean "toy" look) ---
@@ -72,9 +73,39 @@
   // --- settings from the address bar ---
   const params = new URLSearchParams(location.search);
   const choose = (name, allowed, fallback) => (allowed.includes(params.get(name)) ? params.get(name) : fallback);
-  const MAP_ID = choose('map', Object.keys(MAPS), 'barcelona');
-  const MODE = choose('mode', ['standard', 'swiftplay', 'skirmish'], 'standard');
-  const BOTS = choose('bots', Object.keys(BOT_LEVELS), 'easy');
+  let MAP_ID = choose('map', Object.keys(MAPS), 'barcelona');
+  let MODE = choose('mode', ['standard', 'swiftplay', 'skirmish'], 'standard');
+  let BOTS = choose('bots', Object.keys(BOT_LEVELS), 'easy');
+
+  // --- menu: picking map / mode / bots restarts with the new settings ---
+  const NET = Net.detect();
+  const current = { map: MAP_ID, mode: MODE, bots: BOTS };
+  document.querySelectorAll('.pick').forEach(row => {
+    const param = row.dataset.param;
+    if (param !== 'map' && MAP_ID === 'garden') row.classList.add('disabled');
+    row.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.value === current[param]);
+      b.addEventListener('click', () => {
+        if (b.dataset.value === current[param]) return;
+        const next = new URLSearchParams(current);
+        next.set(param, b.dataset.value);
+        if (NET === 'host') next.set('lan', 'host');
+        location.search = next.toString();             // restarts with the new settings
+      });
+    });
+  });
+
+  // --- LAN: wait for the friend (host), or join the host and use their settings (guest) ---
+  let netCfg = null, welcome = null;
+  if (NET === 'host') {
+    const l = await Net.hostLobby();
+    netCfg = { role: 'host', myId: 'H', players: l.players, noBots: l.noBots };
+  } else if (NET === 'guest') {
+    welcome = await Net.guestLobby();
+    MAP_ID = MAPS[welcome.map] ? welcome.map : MAP_ID;
+    MODE = welcome.mode; BOTS = welcome.bots;
+    netCfg = { role: 'guest', myId: Net.id, players: welcome.players, noBots: !!welcome.noBots, firstAttack: welcome.at };
+  }
 
   const mapDef = MAPS[MAP_ID];
   const world = new World(...mapDef.size);
@@ -94,8 +125,10 @@
   const effects = new Effects(scene);
   effects.viewer = camera.position;                  // bubbles stay out of your face
   HUD.init({ mode: { hud: () => null } });   // HUD elements ready before the match starts
-  const game = new Game({ scene, world, mapInfo, effects, camera, difficulty: BOTS, modeName: MODE });
-  const nature = new Nature(game, mapInfo);           // wind, swaying grass, petals, butterflies, birds
+  const game = new Game({ scene, world, mapInfo, effects, camera, difficulty: BOTS, modeName: MODE, net: netCfg });
+  if (netCfg && game.remotes.length && NET === 'host') new NetHost(game, Object.assign({ map: MAP_ID, mode: MODE, bots: BOTS }, netCfg));
+  if (netCfg && game.remotes.length && NET === 'guest') new NetGuest(game, welcome);
+  const nature = new Nature(game);                    // soft wind + birds (sound only)
   // sounds behind a wall come through muffled
   Sound.setOccluder(pos => {
     const from = camera.position, dir = pos.clone().sub(from), d = dir.length();
@@ -243,6 +276,7 @@
   }
   let plantLook = 0;   // 0..1: how far you've knelt down to plant
   let plantTilt = 0;   // seconds since you started planting
+  let sawTilt = 0;     // seconds since you started sawing the tree down
 
   function muzzle(x = 0.17, y = -0.15, z = -0.56) {
     return camera.position.clone().add(tmp.set(x, y, z).applyQuaternion(camera.quaternion));
@@ -251,7 +285,8 @@
   function controlPlayer(dt) {
     const m = me.mover, mode = game.mode;
     const busy = mode.isBusy(me);                      // planting / uprooting
-    const locked = mode.frozen || busy;                // no shooting before GO or while busy
+    const locked = mode.phase === 'over' || busy;      // you can blow bubbles before GO too (just for practice)
+    const nadeLocked = mode.frozen || busy;            // ...but grenades wait for GO
     const stuck = busy || mode.phase === 'over';       // walking is fine before GO (inside your spawn)
 
     // switching: 1 main · 2 sidearm · 3 knife · 4 seed · 5 grenades
@@ -281,13 +316,23 @@
     if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
 
     m.look(Input.mouseDX, Input.mouseDY, sensitivity * (camera.fov / FOV));   // you can look around while planting too
-    // when you start planting, your view tilts down to the hole once; after that it's yours
+    // when you start planting, your view tilts down to the show once (so the hands, the tool
+    // and the hole are all in the middle of the screen); after that it's yours
     plantTilt = planting ? plantTilt + dt : 0;
     if (planting && plantTilt < 0.45) {
       const dp = mode.plantAnim.digPoint;
-      const eyeY = m.pos.y + m.eyeHeight - 0.7;
-      const lookDown = Math.atan2(dp.y + 0.15 - eyeY, Math.max(0.3, Math.hypot(dp.x - m.pos.x, dp.z - m.pos.z)));
+      const eyeY = m.pos.y + m.eyeHeight - PLANT_KNEEL;
+      const lookDown = Math.atan2(dp.y + 0.3 - eyeY, Math.max(0.3, Math.hypot(dp.x - m.pos.x, dp.z - m.pos.z) + PLANT_BACK));
       m.pitch += (lookDown - m.pitch) * Math.min(1, dt * 12);
+    }
+    // same when you start sawing: you turn to the trunk and look at the cut (the saw's in your paws)
+    const sawing = mode.defuser === me && mode.boo;
+    sawTilt = sawing ? sawTilt + dt : 0;
+    if (sawing && sawTilt < 0.45) {
+      const b = mode.boo.pos, dx = b.x - m.pos.x, dz = b.z - m.pos.z, k = Math.min(1, dt * 12);
+      m.yaw += wrapAngle(Math.atan2(-dx, -dz) - m.yaw) * k;
+      const lookDown = Math.atan2(b.y + 0.55 - (m.pos.y + m.eyeHeight), Math.max(0.3, Math.hypot(dx, dz)));
+      m.pitch += (lookDown - m.pitch) * k;
     }
     me.actionHeld = Input.held('Digit4') && !mode.frozen && (me.carrying || nearTree || mode.defuser === me);
     m.update(dt, stuck ? NO_INPUT : {
@@ -314,7 +359,7 @@
     const rightPressed = Input.rightDown && !rightWasDown;
     triggerWasDown = down;
     rightWasDown = Input.rightDown;
-    if (me.slot === 'nade') { handleNade(dt, locked, pressed, rightPressed); return; }
+    if (me.slot === 'nade') { handleNade(dt, nadeLocked, pressed, rightPressed); return; }
     if (me.slot === 'seed') return;                    // holding the seed: hold 4 to plant (see actionHeld)
     if (Input.justPressed('KeyR') && gun.startReload()) { Sound.reload(); game.reloadHeard(me); }
     if (Input.justPressed('KeyY')) viewmodel.inspect();
@@ -363,10 +408,16 @@
     if (plantLook > 0.05 || mode.defuser === me) viewmodel.setVisible(false);  // paws are busy planting / sawing
   }
 
+  const PLANT_KNEEL = 0.5, PLANT_BACK = 0.35;          // planting view: how low, how far back
   function updateCamera() {
     const m = me.mover;
     m.eyePosition(camera.position);
-    camera.position.y -= 0.7 * plantLook;                 // kneel down to plant
+    if (plantLook > 0.001) {                             // planting: kneel, and lean back a little to watch
+      camera.position.y -= PLANT_KNEEL * plantLook;
+      const back = PLANT_BACK * plantLook, bx = Math.sin(m.yaw) * back, bz = Math.cos(m.yaw) * back;
+      const p = camera.position;
+      if (!world.isSolid(world.get(Math.floor(p.x + bx * 1.6), Math.floor(p.y), Math.floor(p.z + bz * 1.6)))) { p.x += bx; p.z += bz; }
+    }
     const pitch = m.pitch + me.gun.recoilPitch;
     camera.rotation.set(pitch, m.yaw + me.gun.recoilYaw, 0);
     camera.updateMatrixWorld();
@@ -416,27 +467,14 @@
   }
 
   // --- menu / pointer lock ---
+  function lanSize(players) { return players.filter(p => p.team === 'blue').length + 'v' + players.filter(p => p.team === 'red').length; }
   HUD.initMinimap(world, mapInfo);
   Input.init(canvas);
   const playBtn = document.getElementById('playBtn');
   const menuSub = document.getElementById('menuSub');
   const modeName = game.mode.kind === 'practice' ? mapDef.name
-    : `${mapDef.name} · ${MODE === 'skirmish' ? 'Skirmish' : game.mode.rules.name} · ${BOTS} bots`;
+    : `${mapDef.name} · ${MODE === 'skirmish' ? 'Skirmish' : game.mode.rules.name} · ${!netCfg ? BOTS + ' bots' : netCfg.noBots ? lanSize(netCfg.players) + ', no bots' : `with friends · ${BOTS} bots`}`;
   menuSub.textContent = modeName;
-  const current = { map: MAP_ID, mode: MODE, bots: BOTS };
-  document.querySelectorAll('.pick').forEach(row => {
-    const param = row.dataset.param;
-    if (param !== 'map' && MAP_ID === 'garden') row.classList.add('disabled');
-    row.querySelectorAll('button').forEach(b => {
-      b.classList.toggle('active', b.dataset.value === current[param]);
-      b.addEventListener('click', () => {
-        if (b.dataset.value === current[param]) return;
-        const next = new URLSearchParams(current);
-        next.set(param, b.dataset.value);
-        location.search = next.toString();             // restarts with the new settings
-      });
-    });
-  });
   playBtn.addEventListener('click', () => {
     Sound.init();
     Music.start();
@@ -462,6 +500,32 @@
   viewmodel.setGun(me.gun);
   updateCamera();
 
+  // --- inside a Cloud Puff: you see only what's right around you (your hands, the hole
+  // you're digging, someone bumping into you); everything further away is white ---
+  const fogBase = { near: scene.fog.near, far: scene.fog.far, color: new THREE.Color(HORIZON) };
+  const SMOKE_WHITE = new THREE.Color(0xf4f6fa);
+  let smokeOn = false, noFogMats = null;
+  function smokeView(h) {
+    const k = Math.min(1, h * 1.6);
+    scene.fog.near = fogBase.near + (0.5 - fogBase.near) * k;
+    scene.fog.far = fogBase.far + (2.6 - fogBase.far) * k;
+    scene.fog.color.copy(fogBase.color).lerp(SMOKE_WHITE, k);
+    scene.background.copy(scene.fog.color);
+    // puffs right around your head would hide your own hands: those step aside
+    for (const sm of game.throwables.smokes)
+      for (const p of sm.puffs) p.mesh.visible = k < 0.05 || p.mesh.position.distanceTo(camera.position) > 1.9;
+    const on = k > 0.35;
+    if (on === smokeOn) return;
+    smokeOn = on;
+    sky.visible = clouds.visible = !on;                // no blue sky poking through the cloud
+    if (!noFogMats) {                                  // far-away landmarks normally ignore fog
+      noFogMats = new Set();
+      scene.traverse(o => { if (o.material && o !== sky && o.material.fog === false) noFogMats.add(o.material); });
+      clouds.traverse(o => { if (o.material) noFogMats.delete(o.material); });
+    }
+    for (const m of noFogMats) { m.fog = on; m.needsUpdate = true; }
+  }
+
   // --- game loop ---
   let last = performance.now();
   function frame(now) {
@@ -473,14 +537,15 @@
       if (me.alive) { watch(null); controlPlayer(dt); HUD.setSpectating(null); } else spectate(dt);
       wasDown = Input.mouseDown;
       game.update(dt);
+      if (NET === 'host' && game.net) game.net.update(dt);   // send the world to your friend
       effects.update(dt, world);
       nature.update(dt, camera.position);
       Sound.listen(camera);                            // your ears follow the camera
       shop.update();
       view.haze = game.throwables.smokeAt(camera.position);
+      smokeView(view.haze);
       HUD.update(dt, me, game.mode, view);
       HUD.scoreboard(Input.held('Tab'), game, me);
-      HUD.setSpread(me.gun.computeSpread(me.mover, view.scoped), camera);
       HUD.updateMarkers(camera, me, plantLook > 0.05 ? [] : game.mode.markersFor(me).concat(game.drops.markersFor(me)));
       if (game.mode.phase === 'over' && Input.justPressed('Enter')) location.reload();
       if (Input.justPressed('KeyM')) HUD.flashHint(Music.toggle() ? 'Music on ♪' : 'Music off');

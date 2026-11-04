@@ -14,11 +14,12 @@ const HUD = {
   init(game) {
     this.game = game;
     const $ = id => document.getElementById(id);
+    // the match bar from your side (a LAN friend can play the cats)
+    if (game.playerTeam === 'red') {
+      document.querySelector('.team.blue').textContent = 'ENEMY DOGS';
+      document.querySelector('.team.red').textContent = 'YOUR CATS';
+    }
     this.el = {
-      chTop: document.querySelector('.ch-top'),
-      chBottom: document.querySelector('.ch-bottom'),
-      chLeft: document.querySelector('.ch-left'),
-      chRight: document.querySelector('.ch-right'),
       hit: $('hitmarker'), dmg: $('dmgText'),
       health: $('health'), healthFill: $('healthFill'), shield: $('shieldBadge'),
       money: $('money'), moneyNum: $('moneyNum'), moneyGain: $('moneyGain'),
@@ -52,16 +53,6 @@ const HUD = {
   openShopSoon() { this._openShopNext = true; },
   closeShop() { if (this.shop) this.shop.close(true); },
 
-  // spread in radians -> crosshair gap in pixels
-  setSpread(spread, camera) {
-    const pxPerUnit = (window.innerHeight / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const gap = 4 + Math.min(120, Math.tan(spread) * pxPerUnit);
-    const e = this.el, len = 9;
-    e.chTop.style.top = `${-gap - len}px`;
-    e.chBottom.style.top = `${gap}px`;
-    e.chLeft.style.left = `${-gap - len}px`;
-    e.chRight.style.left = `${gap}px`;
-  },
 
   hitmarker(part, out, damage) {
     this.el.hit.className = out ? 'kill' : part === 'head' ? 'head' : '';
@@ -233,7 +224,7 @@ const HUD = {
     }
     this.dazzleLeft = Math.max(0, this.dazzleLeft - dt);
     this.el.dazzle.style.opacity = Math.min(1, (this.dazzleLeft / this.dazzleTotal) * 1.8);
-    this.el.haze.style.opacity = (view.haze || 0) * 0.9;
+    this.el.haze.style.opacity = (view.haze || 0) * 0.3;     // just a milky tint: the depth fog does the hiding (see main.js)
     if (this.bannerLeft > 0) {
       this.bannerLeft -= dt;
       this.el.banner.style.opacity = Math.min(1, this.bannerLeft * 2);

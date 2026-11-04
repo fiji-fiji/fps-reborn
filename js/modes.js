@@ -42,7 +42,8 @@ class StandardMode {
     this.score = { blue: 0, red: 0 };
     this.lossStreak = { blue: 0, red: 0 };
     this.round = 0;
-    this.attackTeam = game.playerTeam;   // you attack first
+    // who attacks first is random (a friend's game takes it from the host's)
+    this.attackTeam = game.firstAttack || (Math.random() < 0.5 ? 'blue' : 'red');
     this.boo = new BooBoo(game.scene, game.effects);
     this.plantAnim = new PlantAnim(game);
     this.saw = new ChainsawAnim(game);              // uprooting = cutting the tree down
@@ -135,8 +136,19 @@ class StandardMode {
     this.alertSite = null; this.alertUntil = 0;
     this.uprooter = null;
     // sometimes one attacker sneaks around the other side to catch defenders rotating
+    // (cunning bots nearly always send one)
+    const cunning = this.members(this.attackTeam).some(e => e.level && e.level.cunning);
     const lurkers = this.members(this.attackTeam).filter(e => !e.isPlayer && e !== carrier);
-    this.lurker = lurkers.length && Math.random() < 0.5 ? pick(lurkers) : null;
+    this.lurker = lurkers.length && Math.random() < (cunning ? 0.85 : 0.5) ? pick(lurkers) : null;
+    // cunning attackers often FAKE: two of them go loudly to the other site (running, a cloud
+    // thrown at it) to pull the defenders over, then everyone hits the real site
+    this.fakers = new Set();
+    this.fakeSite = null;
+    if (cunning && Math.random() < 0.55) {
+      this.fakeSite = Object.keys(this.sites).find(n => n !== this.planSite);
+      this.fakeUntil = 26 + Math.random() * 12;                 // seconds after GO
+      lurkers.filter(e => e !== this.lurker).sort(() => Math.random() - 0.5).slice(0, 2).forEach(e => this.fakers.add(e));
+    }
 
     this.planter = null; this.plantProgress = 0;
     this.defuser = null; this.defuseProgress = 0;
@@ -177,11 +189,13 @@ class StandardMode {
       }
       if (b.shield < 50 && b.money >= 1000 && !pistolRound) g.buy(b, 'heavy');
       else if (b.shield < 25 && b.money >= 400) g.buy(b, 'light');
-      // grenades: attackers like clouds + sparkles to take a site, anyone may grab a bubble bomb
+      // grenades: attackers like clouds + sparkles to take a site, anyone may grab a bubble bomb.
+      // Cunning bots always want a sparkle to blind you before they peek.
+      const sly = b.level && b.level.cunning;
       if (this.sideOf(b.team) === 'attack') {
         if (b.money >= 200 && Math.random() < 0.8) g.buy(b, 'smoke');
-        if (b.money >= 250 && Math.random() < 0.5) g.buy(b, 'flash');
-      }
+        if (b.money >= 250 && Math.random() < (sly ? 0.9 : 0.5)) g.buy(b, 'flash');
+      } else if (sly && b.money >= 250 && Math.random() < 0.7) g.buy(b, 'flash');
       if (b.money >= 400 && Math.random() < 0.35) g.buy(b, 'frag');
     }
   }
@@ -233,6 +247,8 @@ class StandardMode {
           this.phase = 'live';
           this.timeLeft = ROUND.live;
           this.version++;
+          // whatever you blew before GO was practice: everyone starts the round full
+          for (const e of this._players()) for (const gun of Object.values(e.guns || {})) if (gun) { gun.ammo = gun.def.magSize; gun.reserve = gun.def.reserve; gun.reloading = 0; }
           HUD.closeShop();
           HUD.banner('GO!', '', 1.2);
           Sound.go();
@@ -274,7 +290,7 @@ class StandardMode {
     }
     // if you carry the Boo-Boo, your bot teammates head for the site you're going to
     const c = b.state === 'carried' ? b.carrier : null;
-    if (c && c.isPlayer) {
+    if (c && (c.isPlayer || c.isHuman)) {
       for (const [name, r] of Object.entries(this.sites)) {
         const cc = siteCenter(r);
         if (Math.hypot(c.pos.x - cc.x, c.pos.z - cc.z) < 22 && this.planSite !== name) { this.planSite = name; this.version++; }
@@ -313,7 +329,7 @@ class StandardMode {
     if (b.state !== 'dropped') return;
     this._updateBotsMayTake();
     for (const e of this.members(this.attackTeam)) {
-      if (!e.isPlayer && !this.botsMayTake) continue;
+      if (!e.isPlayer && !e.isHuman && !this.botsMayTake) continue;
       if (!e.alive || flatDist(e.pos, b.pos) > BOOBOO.pickupRadius || Math.abs(e.pos.y - b.pos.y) > 1.5) continue;
       b.pickUp();
       b.carrier = e;
@@ -479,6 +495,13 @@ class StandardMode {
     if (side === 'attack') {
       // you can HEAR the chainsaw: someone's cutting our tree down, go stop them!
       if (b.state === 'planted' && this.defuser) return goalAt(near(b.pos.x, b.pos.z, 2), { hold: 1, lookAt: [b.pos.x, b.pos.z], rush: true });
+      if (b.state === 'planted' && bot === this.lurker && bot.level.cunning) {
+        // the lurker cuts off the defenders' way back in, from behind
+        const s = this.sites[this.plantedSite], back = s.entrances[s.entrances.length - 1];
+        const home = siteCenter(this.game.mapInfo.spawns.defend);   // where they'll come from
+        const spot = near(back[0] + (home.x - back[0]) * 0.25, back[1] + (home.z - back[1]) * 0.25, 3);
+        return goalAt(spot, { hold: 8 + Math.random() * 6, lookAt: [home.x, home.z] });
+      }
       if (b.state === 'planted') {
         const watch = pick(this.sites[this.plantedSite].entrances);
         const around = { x0: Math.floor(b.pos.x - 8), z0: Math.floor(b.pos.z - 8), x1: Math.floor(b.pos.x + 8), z1: Math.floor(b.pos.z + 8) };
@@ -490,6 +513,11 @@ class StandardMode {
         if (closest === bot) return { x: b.pos.x, z: b.pos.z, hold: 0 };
       }
       const site = this.sites[this.planSite];
+      if (this.fakers.has(bot) && ROUND.live - this.timeLeft < this.fakeUntil && !bot.carrying) {
+        // the fake: make noise at the other site so the defenders rotate there
+        const other = this.sites[this.fakeSite], e = other.entrances[0], c = siteCenter(other);
+        return goalAt(near(e[0], e[1], 3), { hold: 4 + Math.random() * 4, lookAt: [c.x, c.z], loud: true, fakeSmoke: [c.x, c.z] });
+      }
       if (bot === this.lurker && ROUND.live - this.timeLeft < 40) {
         const otherName = Object.keys(this.sites).find(n => n !== this.planSite);
         const other = this.sites[otherName], p = other.via[0];
@@ -518,6 +546,14 @@ class StandardMode {
       const spot = this._uprootSpot();
       // nobody left to stop us (or no time left to be careful): run straight there
       const rush = !attackersLeft || this.timeLeft < 22;
+      // cunning defenders don't trickle in one by one: they meet up first, then retake together
+      if (bot.level.cunning && !rush) {
+        const s = this.sites[this.plantedSite], meet = s.entrances[s.entrances.length - 1];
+        const mates = this.members(this.defendTeam).filter(e => e.alive);
+        const there = mates.filter(e => Math.hypot(e.pos.x - meet[0], e.pos.z - meet[1]) < 9).length;
+        if (there < Math.min(3, mates.length) && this.timeLeft > 26)
+          return goalAt(near(meet[0], meet[1], 3), { hold: 1.5, lookAt: [b.pos.x, b.pos.z] });
+      }
       if (bot === this.uprooter && spot) return goalAt(spot, { action: 'uproot', rush });
       if (!attackersLeft) return goalAt(near(b.pos.x, b.pos.z, 3), { hold: 1, lookAt: [b.pos.x, b.pos.z], rush: true });
       return goalAt(near(b.pos.x, b.pos.z, 6), { hold: 2 + Math.random() * 3, lookAt: [b.pos.x, b.pos.z], rush });

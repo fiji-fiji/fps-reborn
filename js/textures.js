@@ -260,23 +260,29 @@ const Textures = (() => {
   makeTile('gilded', [226, 184, 70], noise([226, 184, 70], 18));
 
   // --- Barcelona ---
-  // painted stucco houses: a tall window with green shutters folded open and a little
-  // wrought-iron balcony, on an ochre / salmon / cream wall
+  // painted stucco houses. Kept calm on purpose (busy walls make enemies hard to see):
+  // a plain wall, and a wall with one simple window with soft green shutters.
   const bcnFacade = wall => px => {
-    const line = [wall[0] * 0.9, wall[1] * 0.9, wall[2] * 0.9];
+    const dark = [wall[0] * 0.55, wall[1] * 0.55, wall[2] * 0.6];
+    const shut = [wall[0] * 0.55 + 20, wall[1] * 0.7 + 25, wall[2] * 0.55 + 10];
     for (let y = 0; y < TILE; y++)
       for (let x = 0; x < TILE; x++) {
-        let c = y === 15 ? line : wall;
-        if (x >= 5 && x <= 10 && y >= 2 && y <= 12) c = x === 5 || x === 10 || y === 2 ? [246, 238, 222] : (x + y) % 6 === 0 ? [96, 120, 142] : [52, 64, 80];
-        if ((x === 3 || x === 4 || x === 11 || x === 12) && y >= 2 && y <= 12) c = y % 2 ? [58, 120, 82] : [48, 104, 70];   // shutters
-        if (y >= 10 && y <= 13 && x >= 3 && x <= 12 && (y === 10 || y === 13 || x % 2 === 0)) c = [40, 40, 48];   // balcony rail
-        if (y === 1 && x >= 4 && x <= 11) c = line;
-        px(x, y, c, (rand() - 0.5) * 8);
+        let c = wall;
+        if (x >= 6 && x <= 9 && y >= 3 && y <= 11) c = dark;                          // the window
+        if ((x === 4 || x === 5 || x === 10 || x === 11) && y >= 3 && y <= 11) c = shut;   // shutters
+        px(x, y, c, (rand() - 0.5) * 4);
       }
   };
-  makeTile('bcn_ochre', [226, 178, 112], bcnFacade([226, 178, 112]));
-  makeTile('bcn_pink', [232, 160, 140], bcnFacade([232, 160, 140]));
-  makeTile('bcn_cream', [240, 222, 190], bcnFacade([240, 222, 190]));
+  const plain = wall => px => {
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) px(x, y, wall, (rand() - 0.5) * 4);
+  };
+  const OCHRE = [226, 184, 126], PINK = [228, 168, 150], CREAMW = [238, 222, 194];
+  makeTile('bcn_ochre', OCHRE, bcnFacade(OCHRE));
+  makeTile('bcn_pink', PINK, bcnFacade(PINK));
+  makeTile('bcn_cream', CREAMW, bcnFacade(CREAMW));
+  makeTile('bcn_ochre_plain', OCHRE, plain(OCHRE));
+  makeTile('bcn_pink_plain', PINK, plain(PINK));
+  makeTile('bcn_cream_plain', CREAMW, plain(CREAMW));
   makeTile('stucco', [232, 200, 150], noise([232, 200, 150], 10));
   // curved terracotta roof tiles
   makeTile('terracotta', [196, 98, 62], px => {
@@ -295,23 +301,23 @@ const Textures = (() => {
         const lx = x % 8, ly = y % 8;
         const grout = lx === 0 || ly === 0;
         const petal = [[2, 2], [5, 2], [2, 5], [5, 5]].some(([cx, cy]) => Math.hypot(lx - cx - 0.5, ly - cy - 0.5) < 1.6);
-        px(x, y, grout ? [160, 156, 150] : petal ? [174, 170, 164] : [198, 194, 188], (rand() - 0.5) * 8);
+        px(x, y, grout ? [178, 174, 168] : petal ? [186, 182, 176] : [198, 194, 188], (rand() - 0.5) * 4);
       }
   });
-  // wavy promenade paving
+  // wavy promenade paving (soft, low contrast)
   makeTile('wave_tile', [214, 200, 170], px => {
     for (let y = 0; y < TILE; y++)
       for (let x = 0; x < TILE; x++) {
         const wv = Math.sin((x / TILE) * Math.PI * 2) * 2;
         const band = Math.floor((y + wv + 16) / 4) % 2;
-        px(x, y, band ? [222, 208, 176] : [176, 92, 70], (rand() - 0.5) * 8);
+        px(x, y, band ? [218, 204, 176] : [200, 170, 146], (rand() - 0.5) * 4);
       }
   });
-  // broken-tile mosaic: bright shards with white grout
-  makeTile('trencadis', [80, 160, 200], px => {
-    const cols = [[64, 150, 214], [250, 206, 70], [240, 110, 90], [96, 190, 120], [250, 250, 245], [150, 110, 210]];
+  // broken-tile mosaic: big soft pastel shards with light grout (calm, so it doesn't fizz)
+  makeTile('trencadis', [150, 196, 214], px => {
+    const cols = [[150, 196, 220], [236, 214, 150], [226, 168, 156], [168, 206, 170], [238, 236, 228]];
     const pts = [];
-    for (let i = 0; i < 18; i++) pts.push([rand() * 16, rand() * 16, cols[Math.floor(rand() * cols.length)]]);
+    for (let i = 0; i < 9; i++) pts.push([rand() * 16, rand() * 16, cols[Math.floor(rand() * cols.length)]]);
     for (let y = 0; y < TILE; y++)
       for (let x = 0; x < TILE; x++) {
         let a = Infinity, b = Infinity, c = null;
@@ -320,7 +326,7 @@ const Textures = (() => {
             Math.hypot(x - p[0], y - p[1] + 16), Math.hypot(x - p[0], y - p[1] - 16));
           if (d < a) { b = a; a = d; c = p[2]; } else if (d < b) b = d;
         }
-        px(x, y, b - a < 0.7 ? [238, 236, 228] : c, (rand() - 0.5) * 10);
+        px(x, y, b - a < 0.6 ? [232, 230, 222] : c, (rand() - 0.5) * 4);
       }
   });
   // old-town stone: big worn sandy blocks
@@ -365,6 +371,9 @@ const Textures = (() => {
       for (let x = 0; x < TILE; x++) px(x, y, (x >> 2) % 2 ? CREAM : [250, 204, 70], (rand() - 0.5) * 10);
   });
   makeTile('shop_blue', [40, 80, 130], shop([40, 80, 130]));
+  makeTile('plinth', [168, 156, 136], px => {
+    for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) px(x, y, y === 0 ? [150, 140, 122] : [168, 156, 136], (rand() - 0.5) * 4);
+  });
 
   const atlas = new THREE.CanvasTexture(canvas);
   atlas.encoding = THREE.sRGBEncoding;
@@ -491,6 +500,10 @@ const BLOCK_DEFS = [
   { name: 'cloth_yellow', all: 'cloth_yellow' },                           // 50
   { name: 'shop_blue', all: 'shop_blue' },                                 // 51
   { name: 'gothic_slab', all: 'gothic', h: 0.5 },                          // 52
+  { name: 'bcn_ochre_plain', all: 'bcn_ochre_plain' },                     // 53
+  { name: 'bcn_pink_plain', all: 'bcn_pink_plain' },                       // 54
+  { name: 'bcn_cream_plain', all: 'bcn_cream_plain' },                     // 55
+  { name: 'plinth', all: 'plinth' },                                       // 56 (plain stone base of a house)
 ];
 const B = {};
 BLOCK_DEFS.forEach((d, i) => { if (d) B[d.name] = i; });

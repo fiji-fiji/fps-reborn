@@ -33,6 +33,12 @@ class Arrows {
       pos: pos.clone(), vel: dir.clone().multiplyScalar(speed),
       life: 6, stuck: false, mesh: this._mesh(),
     };
+    // a bot's first arrow in a fight never lands on the head (same rule as bubbles)
+    if (!owner.isPlayer && !owner.isHuman) {
+      const t = this.game.time;
+      a.noHead = t - (owner._lastShotT ?? -99) > 1.2;
+      owner._lastShotT = t;
+    }
     a.mesh.position.copy(a.pos);
     this.list.push(a);
     Sound.at(pos, 'bowRelease', this.game._volumeAt(pos));
@@ -66,6 +72,7 @@ class Arrows {
       const hitPoint = a.pos.clone().addScaledVector(dir, best);
 
       if (target) {
+        if (part === 'head' && a.noHead) part = 'body';
         const dmg = Math.round(a.def.damage[part] * (0.35 + 0.65 * a.charge));
         g.applyHit(a.owner, target, part, dmg, hitPoint, dir, a.def.key);
         g.effects.bubbleBurst(hitPoint, dir.clone().negate(), 10, 2);

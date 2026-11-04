@@ -1,7 +1,9 @@
 // Uprooting the tree: whoever uproots pulls the cord on a big pink chainsaw and cuts
 // through the trunk while wood chips fly. The joke is the sound: instead of a roar, the
 // saw makes a tiny squeaky fart when it starts, then little pffts while it cuts.
-// The whole show plays in the world, so everyone who can see the tree sees it.
+// The whole show plays in the world, so everyone who can see the tree sees it. The saw is
+// always in the cutter's hands: other people see it in their character's arms; the cutter
+// sees their own fluffy paws on the two handles, forearms coming from their shoulders.
 // When it's through, the tree tips over (TIMBER!) and shrinks away.
 
 class ChainsawAnim {
@@ -20,9 +22,11 @@ class ChainsawAnim {
     this.group.visible = false;
     game.scene.add(this.group);
 
-    // the saw: body at the back, the bar (with its chain) sticking forward (-z)
+    // the saw: body at the back, the bar (with its chain) sticking forward (-z).
+    // It lives in world space (it follows the cutter's hands, not the tree).
     this.saw = new THREE.Group();
-    this.group.add(this.saw);
+    this.saw.visible = false;
+    game.scene.add(this.saw);
     const pink = lam(0xff5d9e, 0x330816), yellow = lam(0xffd23f, 0x332a00), dark = lam(0x2e2e36), metal = lam(0xd6dde6, 0x1a1d22);
     add(this.saw, 0.2, 0.18, 0.3, pink, 0, 0.0, 0.2);                   // engine body
     add(this.saw, 0.21, 0.04, 0.26, yellow, 0, 0.1, 0.2);               // yellow stripe on top
@@ -30,7 +34,7 @@ class ChainsawAnim {
     add(this.saw, 0.25, 0.04, 0.04, dark, 0, 0.17, 0.08);               // front handle (the loop over the top)
     add(this.saw, 0.04, 0.12, 0.04, dark, 0.11, 0.11, 0.08);
     add(this.saw, 0.04, 0.12, 0.04, dark, -0.11, 0.11, 0.08);
-    add(this.saw, 0.03, 0.09, 0.62, metal, 0, -0.01, -0.26);            // the bar
+    this.bar = add(this.saw, 0.03, 0.09, 0.62, metal, 0, -0.01, -0.26); // the bar (stretches to reach the trunk)
     this.chain = [];
     for (let i = 0; i < 14; i++) {                                       // the chain teeth (they run round the bar)
       const t = add(this.saw, 0.036, 0.016, 0.03, dark, 0, 0, 0);
@@ -39,12 +43,14 @@ class ChainsawAnim {
     this.cord = add(this.saw, 0.008, 0.008, 1, lam(0xffffff), 0.11, 0.02, 0.2);   // pull cord (only when starting)
     this.cord.geometry.translate(0, 0, 0.5);
 
-    // two hands: one on the rear handle, one on the front loop
+    // your own two paws (only when it's you sawing): one on the rear handle, one on the front loop
     this.pawBack = makePaw({ shadow: true });
     this.pawFront = makePaw({ shadow: true });
-    this.pawBack.scale.setScalar(0.85);
-    this.pawFront.scale.set(-0.85, 0.85, 0.85);        // a left paw
-    this.group.add(this.pawBack, this.pawFront);
+    this.pawBack.scale.setScalar(0.62);
+    this.pawFront.scale.set(-0.62, 0.62, 0.62);        // a left paw
+    this.pawBack.visible = this.pawFront.visible = false;
+    game.scene.add(this.pawBack, this.pawFront);
+    this._q = new THREE.Quaternion(); this._m = new THREE.Matrix4();
 
     // the cut in the trunk (a dark notch that gets deeper)
     this.notch = add(this.group, 0.3, 0.06, 0.3, lam(0x3d2a17), 0, 0.45, 0.14);
@@ -70,6 +76,7 @@ class ChainsawAnim {
     // the saw starts a little closer to whoever's holding it when they stand far back
     this.reachZ = Math.max(0, Math.min(0.3, Math.hypot(e.pos.x - treePos.x, e.pos.z - treePos.z) - 1.3));
     this.group.visible = true;
+    this.saw.visible = true;
     this.active = true;
     this.who = e;
     this.lastP = 0;
@@ -88,6 +95,8 @@ class ChainsawAnim {
     if (!this.active) return;
     this.active = false;
     this.group.visible = false;
+    this.saw.visible = false;
+    this.pawBack.visible = this.pawFront.visible = false;
   }
 
   finish() { this.cancel(); }
@@ -101,6 +110,63 @@ class ChainsawAnim {
       c.vel.set(side * (0.8 + Math.random() * 1.2), 0.8 + Math.random() * 1.6, 0.6 + Math.random() * 1.2);
       c.life = 0.6 + Math.random() * 0.4;
       c.m.visible = true;
+    }
+  }
+
+  // Put the saw in the cutter's hands, its bar reaching into the trunk.
+  _place(started, cut, yank, shakeX, shakeY) {
+    const e = this.who, model = e && e.model, V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const up = V(0, 1, 0);
+    const trunk = this.group.position.clone().setY(this.group.position.y + this.cutY);
+    // first person (your own model is hidden): the hands are just below your eyes
+    const fp = !model || !model.group || !model.group.visible;
+    let R, Lh, eye = null, right = null;
+    if (fp) {
+      eye = this.game.camera.position.clone();
+      const f = trunk.clone().sub(eye).setY(0).normalize();
+      right = new THREE.Vector3().crossVectors(f, up).normalize();
+      // held off to the right, so the bar goes into the trunk at an angle and you can watch the cut
+      R = eye.clone().addScaledVector(f, 0.5).addScaledVector(up, -0.64).addScaledVector(right, 0.36);
+      Lh = eye.clone().addScaledVector(f, 0.74).addScaledVector(up, -0.58).addScaledVector(right, 0.2);
+    } else {
+      model.group.updateMatrixWorld(true);
+      R = model.rArm.localToWorld(V(0, -0.6, 0));
+      Lh = model.lArm.localToWorld(V(0, -0.6, 0));
+    }
+    const M = R.clone().add(Lh).multiplyScalar(0.5);
+    // where the bar's tip should be: touching the bark … all the way through
+    const toHolder = M.clone().sub(trunk).setY(0).normalize();
+    const tip = trunk.clone().addScaledVector(toHolder, started ? 0.2 - cut * 0.32 : 0.45);
+    // the saw's axes: +z back toward whoever holds it, the bar along -z
+    const Z = M.clone().sub(tip).normalize();
+    const X = new THREE.Vector3().crossVectors(up, Z).normalize();
+    const Y = new THREE.Vector3().crossVectors(Z, X);
+    this._m.makeBasis(X, Y, Z);
+    this.saw.quaternion.setFromRotationMatrix(this._m);
+    // the middle of the two handles goes between the hands
+    const H = V(0, 0.145, 0.23).applyQuaternion(this.saw.quaternion);
+    this.saw.position.copy(M).sub(H).add(V(shakeX, shakeY, 0));
+    // the bar stretches from the saw to the tip
+    const barStart = this.saw.position.clone().add(V(0, -0.01, 0.05).applyQuaternion(this.saw.quaternion));
+    this.barLen = Math.max(0.35, Math.min(1.3, barStart.distanceTo(tip)));
+    this.bar.scale.z = this.barLen / 0.62;
+    this.bar.position.z = 0.05 - this.barLen / 2;
+    // your own paws on the handles, forearms back to your shoulders
+    this.pawBack.visible = this.pawFront.visible = fp;
+    if (fp) {
+      this.saw.updateMatrixWorld(true);
+      const grip = (paw, local, shoulderSide, back) => {
+        const at = this.saw.localToWorld(local.clone());
+        const shoulder = eye.clone().addScaledVector(up, -0.35).addScaledVector(right, shoulderSide * 0.24);
+        const Zp = shoulder.clone().sub(at).normalize();
+        const Xp = new THREE.Vector3().crossVectors(up, Zp).normalize();
+        const Yp = new THREE.Vector3().crossVectors(Zp, Xp);
+        paw.quaternion.setFromRotationMatrix(this._m.makeBasis(Xp, Yp, Zp));
+        paw.position.copy(at).addScaledVector(Zp, back);
+      };
+      grip(this.pawBack, V(0, 0.16, 0.4), 1, yank * 0.22);              // rear handle (it yanks the cord)
+      grip(this.pawFront, V(-0.03, 0.2, 0.08), -1, 0);                 // front loop
+      this.pawBack.curl(1.3); this.pawFront.curl(1.35);
     }
   }
 
@@ -123,28 +189,17 @@ class ChainsawAnim {
     const cut = span(p, 0.1, 0.97);
     const buzz = started ? 0.006 : 0;
     const shakeX = Math.sin(this.time * 90) * buzz, shakeY = Math.cos(this.time * 77) * buzz;
-    const barTip = 0.14 + 0.06 - cut * 0.32;              // tip of the bar: just touching the bark … all the way through
-    this.saw.position.set(shakeX, this.cutY + shakeY, (started ? barTip + 0.57 : 0.95 + (this.reachZ || 0)) + yank * 0.04);
-    this.saw.rotation.set(started ? 0 : -0.15, 0, 0);
+    this._place(started, cut, yank, shakeX, shakeY);
     // the chain runs round the bar
-    const run = this.time * (started ? 6 : 0);
+    const run = this.time * (started ? 6 : 0), L = this.barLen;
     this.chain.forEach((t, i) => {
       const u = ((i / this.chain.length) + run) % 1;
       const top = u < 0.5, k = top ? u * 2 : (u - 0.5) * 2;
-      t.position.set(0, top ? 0.04 : -0.06, top ? 0.03 - k * 0.58 : -0.55 + k * 0.58);
+      t.position.set(0, top ? 0.04 : -0.06, top ? 0.03 - k * (L - 0.04) : 0.01 - L + k * (L - 0.04));
     });
     // the pull cord stretches out on each yank
     this.cord.visible = !started;
     this.cord.scale.z = 0.02 + yank * 0.25;
-    // paws: one on the rear handle (it does the yanking), one on the front loop
-    this.saw.updateMatrix();
-    const S = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(this.saw.matrix);
-    this.pawBack.position.copy(S(0.06, 0.13, 0.42 + yank * 0.25));
-    this.pawBack.rotation.set(0.35, 0.25, -1.2);
-    this.pawBack.curl(1.3);
-    this.pawFront.position.copy(S(-0.02, 0.21, 0.12));
-    this.pawFront.rotation.set(0.2, -0.1, 0.1);
-    this.pawFront.curl(1.35);
     // the notch gets deeper; chips fly while cutting
     this.notch.visible = cut > 0;
     this.notch.scale.set(1, 1, Math.max(0.05, cut));

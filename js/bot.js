@@ -14,6 +14,16 @@
 //    chase blindly: relocate somewhere hidden, back toward teammates.
 //  - Hold angles from far back (closer to the corner = seen first), unless close-range.
 //  - Sound is information: footsteps, shots, refills and the chainsaw all tell them things.
+//  - Hard bots are cunning (see BOT_LEVELS.hard.cunning): sneakier and crueller, never better aim.
+//
+// Pre-aim fundamentals (how good players think before they aim):
+//  - Reticle placement: while moving, the crosshair sits on where enemies most likely are
+//    (spots where fights happened, site entrances) instead of on the path ahead.
+//  - Teammates are clearing help: when one falls back hurt, healthy friends nearby cover the
+//    way the threat comes from.
+//  - Don't get sandwiched: enemies known on two sides = back off and take them one at a time.
+//  - Red-dot luring (cunning): fire a couple of shots to give away a spot, then move off and
+//    hold whoever comes to check it.
 
 const BOT_LEVELS = {
   easy: {
@@ -39,6 +49,10 @@ const BOT_LEVELS = {
     reaction: 0.38, sight: 60, turnSpeed: 9, maxTurn: 8, aimError: 0.055, errorDecay: 2.2,
     wobble: 0.008, headChance: 0.35, recoilComp: 0.7, fireCone: 0.035,
     burst: [2, 4], burstPause: 0.35, stopToShoot: true, strafe: true,
+    // the aim numbers above never go up for "smarter" bots. Hard bots are nastier in how they
+    // PLAY instead: silent walking, fakes, lurkers cutting off rotations, ambushes on footsteps,
+    // grouped retakes, sparkles before peeks, pouncing on weak or dazzled players, jiggly strafes.
+    cunning: true,
   },
 };
 
@@ -107,6 +121,7 @@ class Bot {
 
   spawn(x, y, z, yaw) {
     this.mover.spawn(x, y, z, yaw);
+    this.fakeSmoked = false;
     this.health = 100;
     this.alive = true;
     this.carrying = false;
@@ -176,7 +191,7 @@ class Bot {
     }
 
     this._siteUtility();
-    if (!engaged) this._considerPeek();
+    if (!engaged) { this._considerPeek(); this._lure(); }
     const cmd = { fwd: 0, right: 0, jump: false, crouch: false, walk: this._shouldSneak() };
     const move = this.actionHeld ? null : this._decideMove(dt, engaged, cmd);
     if (this.tactic && this.tactic.type === 'hold') cmd.crouch = true;   // small and quiet while holding an angle
@@ -269,6 +284,7 @@ class Bot {
       this.lookAt = null;
       this.chasing = false;
       if (this.team === g.playerTeam) best.spottedUntil = g.time + 1.2;   // shows on your minimap
+      (best.seenBy || (best.seenBy = {}))[this.team] = g.time + 1.2;      // (and on a LAN friend's, whichever team)
       if (g.mode.onSpotted) g.mode.onSpotted(this, best);
     } else if (this.target) {
       this.targetVisible = false;
@@ -300,7 +316,7 @@ class Bot {
     for (const e of g.entities) {
       if (!e.alive || e.team === this.team || e.team === 'buddy') continue;
       if (e.target === this && e.targetVisible) return true;
-      if (e.isPlayer && e.mover) {                                   // is the player looking at us?
+      if ((e.isPlayer || e.isHuman) && e.mover) {                    // is a human looking at us?
         const dx = this.pos.x - e.pos.x, dz = this.pos.z - e.pos.z, d = Math.hypot(dx, dz) || 1;
         const dot = (-Math.sin(e.mover.yaw) * dx - Math.cos(e.mover.yaw) * dz) / d;
         if (dot > 0.75 && d < 45 && g.canSee(e.mover.eyePosition(new THREE.Vector3()), this)) return true;
@@ -332,12 +348,16 @@ class Bot {
     this.goal = null; this.chasing = false;
     this.tactic = { type: 'hide', look: threatPos.clone().setY(threatPos.y + 1.4), until: this.game.time + 6 };
     this.lastHide = this.game.time;
+    if (this.health + this.shield < 60) this._askCover(threatPos);
     return true;
   }
 
   // Info advantage: walk up pre-aimed at where we know an enemy is.
   _peek(pos, seconds = 3) {
     if (!this._pathTo(pos.x, pos.z)) return false;
+    // cunning: blind them first
+    const d = Math.hypot(pos.x - this.pos.x, pos.z - this.pos.z);
+    if (this.level.cunning && d > 6 && this.game.time - (this.lastNade || -99) > 5) this._throw('flash', pos.clone().setY(pos.y + 1.2));
     this.goal = null; this.chasing = false;
     this.tactic = { type: 'peek', look: pos.clone().setY(pos.y + 1.4), until: this.game.time + seconds };
     this.lookAt = this.tactic.look.clone();
@@ -386,8 +406,9 @@ class Bot {
         this.strafeTimer -= dt;
         if (this.strafeTimer <= 0) {
           this.strafeDir = Math.random() < 0.5 ? -1 : 1;
-          this.strafeTimer = 0.3 + Math.random() * 0.5;
+          this.strafeTimer = L.cunning ? 0.18 + Math.random() * 0.3 : 0.3 + Math.random() * 0.5;   // cunning: jittery, hard to track
         }
+        if (L.cunning) cmd.crouch = Math.sin(t * 6 + this.seed) > 0.55;   // ...and ducks now and then
         return { x: Math.cos(me.yaw) * this.strafeDir, z: -Math.sin(me.yaw) * this.strafeDir };
       }
       // easy bots just keep walking while shooting
@@ -426,6 +447,10 @@ class Bot {
     this.chasing = false;
     if (!engaged) this.lookAt = null;
     const goal = this.goal;
+    if (goal && goal.fakeSmoke && !this.fakeSmoked) {           // the fake: a cloud on the site we're NOT taking
+      this.fakeSmoked = true;
+      this._throw('smoke', new THREE.Vector3(goal.fakeSmoke[0], this.mover.pos.y, goal.fakeSmoke[1]));
+    }
     if (goal && goal.action) {
       this.actionHeld = true;                               // plant / uproot: hold still
       return;
@@ -480,6 +505,8 @@ class Bot {
       [yaw, pitch] = anglesTo(eye, this.lookAt);
     } else if (this._danger()) {
       [yaw, pitch] = anglesTo(eye, this._danger());               // crosshair on where they probably are
+    } else if (move && this._preAim(eye, move)) {
+      [yaw, pitch] = anglesTo(eye, this._preAimPt);               // ...or on where fights usually happen
     } else if (move) {
       yaw = Math.atan2(-move.x, -move.z);
       pitch = 0;
@@ -492,6 +519,78 @@ class Bot {
     const dpitch = Math.max(-lim, Math.min(lim, (pitch - me.pitch) * k));
     me.yaw = wrapAngle(me.yaw + dyaw);
     me.pitch += dpitch;
+  }
+
+  // While moving with nothing known: the likeliest enemy spot ahead of us that we can see
+  // (where fights happened before, site entrances), so the crosshair is already there.
+  _preAim(eye, move) {
+    const g = this.game, t = g.time;
+    if (t - (this._preAimAt || -9) < 0.35) return !!this._preAimPt;
+    this._preAimAt = t;
+    this._preAimPt = null;
+    const mode = g.mode, spots = [];
+    for (const p of g.hotSpots || []) spots.push([p.x, p.z, 1.5]);
+    if (mode.sites) for (const s of Object.values(mode.sites)) for (const e of s.entrances) spots.push([e[0], e[1], 1]);
+    let best = null, bestScore = 0.25;
+    const y = g.mapInfo.spawn.y + 1.4;
+    for (const [x, z, w] of spots) {
+      const dx = x - eye.x, dz = z - eye.z, d = Math.hypot(dx, dz);
+      if (d < 5 || d > 30) continue;
+      const ahead = (dx * move.x + dz * move.z) / d;               // in front of where we're walking
+      if (ahead < 0.2) continue;
+      const score = ahead * w * (1 - d / 45);
+      if (score <= bestScore) continue;
+      const pt = new THREE.Vector3(x, y, z);
+      if (!g.lineOfSight(eye, pt)) continue;
+      bestScore = score; best = pt;
+    }
+    this._preAimPt = best;
+    return !!best;
+  }
+
+  // Ask healthy teammates nearby to cover us while we fall back from `threatPos`.
+  _askCover(threatPos) {
+    const look = threatPos.clone().setY(threatPos.y + 1.4);
+    for (const f of this.game.bots) {
+      if (f === this || !f.alive || f.team !== this.team) continue;
+      if (f.pos.distanceTo(this.pos) > 14 || f.health + f.shield < 60) continue;
+      if (f.targetVisible || f.tactic || f.carrying || f.actionHeld || f._mustRush()) continue;
+      f._startHold(look, 3 + Math.random() * 2);
+    }
+  }
+
+  // Enemies known on two different sides of us (within 20 m)? Then we'd get sandwiched.
+  _sandwiched() {
+    const g = this.game, dirs = [];
+    for (const i of g.intelFor(this.team, 4)) {
+      const dx = i.pos.x - this.pos.x, dz = i.pos.z - this.pos.z, d = Math.hypot(dx, dz);
+      if (d > 2 && d < 20) dirs.push(Math.atan2(dx, dz));
+    }
+    for (let a = 0; a < dirs.length; a++)
+      for (let b = a + 1; b < dirs.length; b++)
+        if (Math.abs(wrapAngle(dirs[a] - dirs[b])) > 1.9) return true;
+    return false;
+  }
+
+  // Cunning defenders, bored on a quiet site: fire a couple of shots to give away this spot
+  // (they'll hear it and come to check), then slip off somewhere that sees this spot.
+  _lure() {
+    const g = this.game, mode = g.mode, t = g.time;
+    if (!this.level.cunning || mode.kind !== 'standard' || mode.phase !== 'live' || mode.sideOf(this.team) !== 'defend') return;
+    if (this.targetVisible || this.tactic || this.path || this.waitTimer <= 0 || this.carrying) return;
+    if (t - (this.lastLure || -99) < 30 || Math.random() > 0.01) return;
+    const gun = this.gun;
+    if (gun.def.bow || gun.ammo < 3 || !gun.ready) return;
+    this.lastLure = t;
+    const eye = this.mover.eyePosition(new THREE.Vector3());
+    for (let i = 0; i < 2; i++) for (const dir of gun.fire(this.mover.yaw, this.mover.pitch, this.mover, true)) g.fireShot(this, eye.clone(), dir, gun);
+    g.shotHeard(this, eye.clone(), gun.def.key);
+    const here = this.pos.clone();
+    const rect = { x0: Math.floor(here.x - 9), z0: Math.floor(here.z - 9), x1: Math.floor(here.x + 9), z1: Math.floor(here.z + 9) };
+    const c = g.findHoldSpot(rect, [here.x, here.z], closeRangeGun(this));
+    if (!c || !this._pathTo(c[0] + 0.5, c[1] + 0.5)) return;
+    this.goal = null; this.waitTimer = 0;
+    this.tactic = { type: 'hide', look: here.setY(here.y + 1.4), until: t + 12 };
   }
 
   // The freshest place an enemy is known to be (within 30 m, last 5 s), at head height.
@@ -569,6 +668,12 @@ class Bot {
     else if (!this.gun.def.bow && this.gun.ammo < this.gun.def.magSize * 0.25) s -= 1.2;
     if (this.tactic && this.tactic.type === 'hold') s += 0.8;     // we're already pre-aimed here
     if (dist < 5) s += 1.5;                                        // too close to run away
+    if (dist >= 5 && this._sandwiched()) s -= 1.2;                 // enemies on two sides: don't stand between them
+    if (this.level.cunning) {
+      s += Math.max(0, 100 - enemy.health) / 45;                   // cruel: finish off the wounded
+      if (enemy.blindUntil > g.time) s += 2;                       // ...and the dazzled
+      if (enemy.gun && enemy.gun.busy) s += 1;                     // ...and the ones refilling
+    }
     return s + this._urgency();
   }
 
@@ -605,6 +710,7 @@ class Bot {
     if (!this._pathTo(c[0] + 0.5, c[1] + 0.5)) return false;
     this.tactic = { type: 'hide', look, until: t + 7 };
     this.lastHide = t;
+    if (this.health + this.shield < 60) this._askCover(threatPos);
     return true;
   }
 
@@ -633,6 +739,11 @@ class Bot {
     // close footsteps + a close-range blaster + they don't know we're here: pounce
     if (kind === 'step' && d < 9 && closeGun && strong && !this._spotted() && this._peek(pos, 2.5)) return;
     if (kind === 'shot' && d > 14) return;                         // far shots: just good to know
+    // cunning: footsteps coming and they don't know we're here? Freeze, crouch, pre-aim: ambush.
+    if (this.level.cunning && kind === 'step' && d < 22 && !this._spotted() && !this.tactic) {
+      this._startHold(pos.clone().setY(pos.y + 1.4), 3 + Math.random() * 3);
+      return;
+    }
     const mode = g.mode;
     const attacking = mode.kind === 'standard' && mode.sideOf(this.team) === 'attack' && mode.phase === 'live';
     if (this.tactic || attacking || Math.random() < 0.4) return;   // attackers keep moving (the crosshair still turns to it)
@@ -645,7 +756,7 @@ class Bot {
     if (!this.alive || this.carrying || this.actionHeld) return;
     if (attacker === this) {
       // got one: we're spotted now (their friends heard it). Don't keep standing on the same spot.
-      if (!this._mustRush() && Math.random() < 0.75) this._relocate(victim.pos) || this._hideFrom(victim.pos);
+      if (!this._mustRush() && (this.level.cunning || Math.random() < 0.75)) this._relocate(victim.pos) || this._hideFrom(victim.pos);
       return;
     }
     if (victim.team === this.team && attacker && attacker.pos && !this.targetVisible &&
@@ -660,7 +771,15 @@ class Bot {
   _shouldSneak() {
     const g = this.game, t = g.time, mode = g.mode;
     if (this.goal && this.goal.rush) return false;               // no time to be quiet
+    if (this.goal && this.goal.loud) return false;               // faking: they WANT to be heard
     if (this.tactic) return true;
+    if (this.level.cunning) {
+      // cunning: silent almost all the time, only running when the clock really says so
+      if (mode.kind !== 'standard') return t - this.heardAt < 12 || t - this.lastSeenAt < 10;
+      if (mode.phase === 'planted') return mode.sideOf(this.team) === 'attack' || mode.timeLeft > 30;
+      if (mode.phase === 'live' && mode.sideOf(this.team) === 'attack') return mode.timeLeft > 35 && !(this.carrying && mode.timeLeft < 50);
+      return true;
+    }
     const attacking = mode.kind === 'standard' && mode.phase === 'live' && mode.sideOf(this.team) === 'attack';
     if (attacking) {
       if (mode.timeLeft < 55 || this.carrying) return false;      // no time to be sneaky anymore

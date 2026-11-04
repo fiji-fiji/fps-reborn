@@ -2,6 +2,9 @@
 // street lamps, leafy tree crowns, cafe tables, flowers and a far-away iron tower.
 // Maps list them in mapInfo.decor; buildDecor() turns them into meshes.
 
+// Small fussy bits that cluttered the view and made enemies harder to spot: not drawn.
+const DECOR_SKIP = new Set(['flowers', 'table', 'umbrella', 'lamp']);
+
 function buildDecor(scene, list) {
   const root = new THREE.Group();
   const lam = (color, o = {}) => new THREE.MeshLambertMaterial(Object.assign({ color }, o));
@@ -42,6 +45,7 @@ function buildDecor(scene, list) {
   const rng = makeRng(321);
 
   for (const d of list) {
+    if (DECOR_SKIP.has(d.type)) continue;
     switch (d.type) {
       case 'lamp': {
         add(new THREE.CylinderGeometry(0.15, 0.2, 0.3, 8), M.iron, d.x, d.y + 0.15, d.z);

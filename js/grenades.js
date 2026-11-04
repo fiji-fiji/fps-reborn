@@ -166,6 +166,7 @@ class Throwables {
     g.effects.confettiBurst(p, 70, 7);
     g.effects.bubbleBurst(p, new THREE.Vector3(0, 1, 0), 16, 3, 0.1);
     Sound.at(p, 'sparkle', g._volumeAt(p));
+    if (g.isGuest) return;                     // LAN friend: the host decides who's dazzled
     const eye = new THREE.Vector3();
     for (const e of g.entities) {
       if (!e.alive || !e.mover || e.team === n.owner.team) continue;    // only enemies get dazzled

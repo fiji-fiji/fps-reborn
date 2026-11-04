@@ -56,6 +56,7 @@ class Drops {
     gun.sprayIndex = 0;
     const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
     const item = {
+      id: this.nextId = (this.nextId || 0) + 1,     // (LAN play: the friend's screen tracks drops by id)
       gun,
       group: this._model(gun),
       pos: at.clone().add(new THREE.Vector3(0, 1.1, 0)),
@@ -165,7 +166,7 @@ class Drops {
       // You pick things up with [F] instead.
       if (!it.landed) continue;
       for (const e of g.entities) {
-        if (!e.alive || !e.guns || !e.mover || e.team === 'buddy' || e.isPlayer) continue;
+        if (!e.alive || !e.guns || !e.mover || e.team === 'buddy' || e.isPlayer || e.isHuman) continue;
         if (it.owner === e && it.ownerWait > 0) continue;
         if (Math.hypot(it.pos.x - e.pos.x, it.pos.z - e.pos.z) > DROP.reach || Math.abs(it.floor - e.pos.y) > 1.2) continue;
         const main = e.guns.main;
