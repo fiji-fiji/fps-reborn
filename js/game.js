@@ -150,17 +150,22 @@ class Game {
       if (e.nades[item] >= GRENADES[item].max) return false;
       e.money -= price;
       e.nades[item]++;
+      e.roundBuys.nades = e.roundBuys.nades || {};
+      e.roundBuys.nades[item] = (e.roundBuys.nades[item] || 0) + 1;
       return true;
     }
     if (WEAPONS[item]) {
       const def = WEAPONS[item];
       if (e.guns.main && e.guns.main.def === def) { e.slot = 'main'; return false; }   // already have it
       if (e.roundBuys.main) e.money += this.priceOf(e.roundBuys.main);
+      else e.roundBuys.prevMain = e.guns.main;          // what you had before, in case you sell it back
       e.money -= price;
       giveWeapon(e, item);
       e.roundBuys.main = item;
+      e.roundBuys.mainGun = e.guns.main;
     } else {
       const s = SHIELDS[item];
+      if (!e.roundBuys.shield) e.roundBuys.prevShield = e.shield;
       if (e.roundBuys.shield) {
         e.money += this.priceOf(e.roundBuys.shield);
         e.shield = Math.max(0, e.shield - SHIELDS[e.roundBuys.shield].amount);
@@ -170,6 +175,31 @@ class Game {
       e.shield = s.amount;
       e.roundBuys.shield = item;
     }
+    if (!this.mode.freeShop) e.money = Math.min(MAX_MONEY, e.money);
+    return true;
+  }
+
+  // Changed your mind? Sell back something you bought this buy phase, for the full price.
+  sell(e, item) {
+    if (!this.mode.canBuy(e)) return false;
+    const rb = e.roundBuys;
+    if (GRENADES[item]) {
+      if (!rb.nades || !rb.nades[item] || e.nades[item] <= 0) return false;
+      rb.nades[item]--;
+      e.nades[item]--;
+      e.money += this.priceOf(item);
+    } else if (WEAPONS[item]) {
+      if (rb.main !== item || e.guns.main !== rb.mainGun) return false;
+      e.money += this.priceOf(item);
+      e.guns.main = rb.prevMain || null;
+      if (!e.guns.main && e.slot === 'main') e.slot = 'side';
+      rb.main = rb.mainGun = rb.prevMain = null;
+    } else if (SHIELDS[item]) {
+      if (rb.shield !== item) return false;
+      e.money += this.priceOf(item);
+      e.shield = rb.prevShield || 0;
+      rb.shield = null;
+    } else return false;
     if (!this.mode.freeShop) e.money = Math.min(MAX_MONEY, e.money);
     return true;
   }
@@ -382,6 +412,8 @@ class Game {
   update(dt) {
     this.time += dt;
     const frozen = this.mode.frozen;
+    // holding the knife makes anyone move 1.5x faster
+    for (const e of this.entities) if (e.mover) e.mover.speedMul = e.slot === 'knife' ? KNIFE_SPEED : 1;
     for (const b of this.bots) b.update(dt, frozen);
     for (const dm of this.dummies) dm.update(dt, this.camera);
     this.arrows.update(dt);

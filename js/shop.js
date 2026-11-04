@@ -61,6 +61,11 @@ class ShopUI {
       else Sound.click();
       this.render();
     });
+    b.addEventListener('contextmenu', ev => {           // right-click: sell it back
+      ev.preventDefault();
+      if (g.sell(me, item)) Sound.sell(); else Sound.click();
+      this.render();
+    });
     return b;
   }
 
@@ -88,9 +93,11 @@ class ShopUI {
 
   _refreshTop() {
     const mode = this.game.mode;
-    this.moneyEl.textContent = mode.freeShop ? 'Everything is free here!' : `🪙 ${fmtMoney(this.me.money)}`;
+    const money = mode.freeShop ? 'Everything is free here!' : `${WeaponIcons.money(0.9)} ${fmtMoney(this.me.money)}`;
+    if (money !== this._lastMoneyHtml) { this.moneyEl.innerHTML = money; this._lastMoneyHtml = money; }
     const next = !mode.freeShop && mode.minNextMoney ? mode.minNextMoney(this.me) : null;
-    this.nextEl.textContent = next == null ? '' : `next round, at least 🪙 ${fmtMoney(next)}`;
+    const nextHtml = next == null ? '' : `next round, at least ${WeaponIcons.money(0.8)} ${fmtMoney(next)}`;
+    if (nextHtml !== this._lastNextHtml) { this.nextEl.innerHTML = nextHtml; this._lastNextHtml = nextHtml; }
     this.timerEl.textContent = mode.phase === 'prep' ? `Round starts in ${Math.ceil(mode.timeLeft)}s` : '';
   }
 

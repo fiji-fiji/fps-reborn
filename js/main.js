@@ -233,7 +233,8 @@
     if (me.guns[slot]) me.gun.cooldown = Math.max(me.gun.cooldown, 0.35);   // takes a moment to bring it up
     Sound.swap();
   }
-  let plantLook = 0;   // 0..1: how far your view has tilted down to watch yourself plant
+  let plantLook = 0;   // 0..1: how far you've knelt down to plant
+  let plantTilt = 0;   // seconds since you started planting
 
   function muzzle(x = 0.17, y = -0.15, z = -0.56) {
     return camera.position.clone().add(tmp.set(x, y, z).applyQuaternion(camera.quaternion));
@@ -267,7 +268,15 @@
     const fov = view.scoped ? gun.def.scope.fov : FOV;
     if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
 
-    if (!planting) m.look(Input.mouseDX, Input.mouseDY, sensitivity * (camera.fov / FOV));
+    m.look(Input.mouseDX, Input.mouseDY, sensitivity * (camera.fov / FOV));   // you can look around while planting too
+    // when you start planting, your view tilts down to the hole once; after that it's yours
+    plantTilt = planting ? plantTilt + dt : 0;
+    if (planting && plantTilt < 0.45) {
+      const dp = mode.plantAnim.digPoint;
+      const eyeY = m.pos.y + m.eyeHeight - 0.7;
+      const lookDown = Math.atan2(dp.y + 0.15 - eyeY, Math.max(0.3, Math.hypot(dp.x - m.pos.x, dp.z - m.pos.z)));
+      m.pitch += (lookDown - m.pitch) * Math.min(1, dt * 12);
+    }
     me.actionHeld = (Input.held('KeyE') || (me.slot === 'seed' && Input.mouseDown)) && !mode.frozen;
     m.update(dt, stuck ? NO_INPUT : {
       fwd: (Input.held('KeyW') ? 1 : 0) - (Input.held('KeyS') ? 1 : 0),
@@ -337,20 +346,14 @@
       }
     }
     viewmodel.update(dt, m, view.scoped);
-    if (plantLook > 0.05) viewmodel.setVisible(false);  // hands are busy planting
+    if (plantLook > 0.05 || mode.defuser === me) viewmodel.setVisible(false);  // paws are busy planting / sawing
   }
 
   function updateCamera() {
     const m = me.mover;
     m.eyePosition(camera.position);
     camera.position.y -= 0.7 * plantLook;                 // kneel down to plant
-    let pitch = m.pitch + me.gun.recoilPitch;
-    if (plantLook > 0.001) {
-      // tilt down to look at the hole being dug
-      const dp = game.mode.plantAnim ? game.mode.plantAnim.digPoint : m.pos;
-      const lookDown = Math.atan2(dp.y + 0.15 - camera.position.y, Math.max(0.3, Math.hypot(dp.x - m.pos.x, dp.z - m.pos.z)));
-      pitch += (lookDown - pitch) * plantLook;
-    }
+    const pitch = m.pitch + me.gun.recoilPitch;
     camera.rotation.set(pitch, m.yaw + me.gun.recoilYaw, 0);
     camera.updateMatrixWorld();
   }

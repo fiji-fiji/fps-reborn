@@ -48,44 +48,49 @@ class SassyHand {
   constructor(camera) {
     this.camera = camera;
     const lam = (c, e = 0) => new THREE.MeshLambertMaterial({ color: c, emissive: e });
-    const skin = lam(0xf2c6a0), gold = lam(0xffd36b, 0x403010);
+    // a fluffy Bichon paw: white fur, pink beans, pink painted claws, a gold bracelet + ring
+    const skin = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 14, 8, 41), color: BICHON.fur, emissive: DOG_GLOW });
+    const gold = lam(0xffd36b, 0x403010), bean = lam(PAW.bean, 0x3a1020);
     this.nailMat = lam(0xff3d8b, 0x551030);
-    this.paintMat = lam(0xff3d8b, 0x551030);           // the nail that gets repainted
-    const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xc9a7ff, 16, 8, 21) });
+    this.paintMat = lam(0xff3d8b, 0x551030);           // the claw that gets repainted
+    const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 20, 8, 43), color: PAW.sleeve });
     const add = (parent, w, h, d, m, x, y, z) => {
-      const b = new THREE.Mesh(roundedBoxGeometry(w, h, d, Math.min(w, h, d) * 0.35, 3), m);
+      const b = new THREE.Mesh(roundedBoxGeometry(w, h, d, Math.min(w, h, d) * 0.42, 3), m);
       b.position.set(x, y, z);
       parent.add(b);
       return b;
     };
     const piv = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
 
-    // the hand: fingers point up, the back of the hand (with the nails) faces you
+    // the paw: toes point up, the back of the paw (with the claws) faces you, beans face away
     this.root = new THREE.Group();
-    this.root.scale.setScalar(0.75);                  // the left hand is a bit smaller than the right
+    this.root.scale.setScalar(0.75);
     this.root.visible = false;
     camera.add(this.root);
     const R = this.root;
-    add(R, 0.06, 0.065, 0.02, skin, 0, 0, 0);                         // palm
+    add(R, 0.07, 0.066, 0.036, skin, 0, 0, 0);                        // the paw
+    add(R, 0.032, 0.026, 0.006, bean, 0, -0.006, -0.019);             // big pad
     this.fingers = [];
-    const xs = [0.0215, 0.007, -0.007, -0.0215], lens = [1, 1.1, 1, 0.82];
+    const xs = [0.0235, 0.008, -0.008, -0.0235], lens = [1, 1.1, 1, 0.85];
     xs.forEach((x, i) => {
-      const k = piv(R, x, 0.0325, 0);
-      add(k, 0.0135, 0.03 * lens[i], 0.015, skin, 0, 0.015 * lens[i], 0);
-      const m = piv(k, 0, 0.03 * lens[i], 0);
-      add(m, 0.013, 0.026 * lens[i], 0.014, skin, 0, 0.013 * lens[i], 0);
-      const nail = add(m, 0.011, 0.014, 0.003, i === 0 ? this.paintMat : this.nailMat, 0, 0.016 * lens[i], 0.0085);
-      if (i === 2) add(k, 0.016, 0.006, 0.018, gold, 0, 0.012, 0);      // gold ring
+      const k = piv(R, x, 0.03, 0);
+      add(k, 0.017, 0.024 * lens[i], 0.022, skin, 0, 0.012 * lens[i], 0);      // fluffy toe
+      const m = piv(k, 0, 0.022 * lens[i], 0);
+      add(m, 0.016, 0.018 * lens[i], 0.021, skin, 0, 0.009 * lens[i], 0);
+      add(m, 0.011, 0.01, 0.005, bean, 0, 0.008 * lens[i], -0.011);           // toe bean
+      const nail = add(m, 0.009, 0.012, 0.006, i === 0 ? this.paintMat : this.nailMat, 0, 0.019 * lens[i], 0.008);   // painted claw
+      if (i === 2) add(k, 0.02, 0.006, 0.024, gold, 0, 0.01, 0);       // gold ring
       this.fingers.push({ k, m, nail });
     });
-    const tb = piv(R, 0.029, -0.012, 0.002);
-    add(tb, 0.015, 0.026, 0.015, skin, 0, 0.013, 0);
-    const tt = piv(tb, 0, 0.026, 0);
-    add(tt, 0.014, 0.022, 0.014, skin, 0, 0.011, 0);
-    add(tt, 0.011, 0.012, 0.003, this.nailMat, 0, 0.014, 0.008);
+    const tb = piv(R, 0.033, -0.012, 0.002);                          // dewclaw
+    add(tb, 0.016, 0.02, 0.018, skin, 0, 0.01, 0);
+    const tt = piv(tb, 0, 0.02, 0);
+    add(tt, 0.015, 0.016, 0.017, skin, 0, 0.008, 0);
+    add(tt, 0.009, 0.01, 0.005, this.nailMat, 0, 0.012, 0.008);
     this.thumb = { b: tb, t: tt };
-    add(R, 0.066, 0.012, 0.026, gold, 0, -0.038, 0);                  // bracelet
-    add(R, 0.07, 0.12, 0.03, sleeve, 0, -0.104, 0);                   // sleeve
+    add(R, 0.074, 0.013, 0.04, gold, 0, -0.038, 0);                   // bracelet
+    add(R, 0.068, 0.06, 0.04, skin, 0, -0.07, 0);                     // fluffy forearm
+    add(R, 0.078, 0.1, 0.046, sleeve, 0, -0.145, 0);                  // team sleeve
 
     // props
     this.file = add(R, 0.11, 0.009, 0.012, lam(0xf3c9a6, 0x221510), 0, 0.09, 0.012);   // nail file

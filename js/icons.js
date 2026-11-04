@@ -115,6 +115,19 @@ const ICON_ART = {
     '....y....',
     '....y....',
   ],
+  // money: a doggy bank note (a fluffy pup in the middle)
+  note: [
+    'gggggggggggggggggggg',
+    'gLLLLLLLLLLLLLLLLLLg',
+    'gLGGLLLLLWWWWWLLLLLg',
+    'gLGLLLLLWWWWWWWLLLLg',
+    'gLLLLLLLWKWWWKWLLLLg',
+    'gLLLLLLLWWWKWWWLLGLg',
+    'gLLLLLLLLWWpWWLLGGLg',
+    'gLLLLLLLLLWWWLLLLLLg',
+    'gLLLLLLLLLLLLLLLLLLg',
+    'gggggggggggggggggggg',
+  ],
   tree: [
     '..LPL...',
     '.LLLLL..',
@@ -152,6 +165,12 @@ const WeaponIcons = (() => {
       const ic = cache[key];
       if (!ic) return '';
       return `<img class="wicon" src="${ic.url}" style="height:${(ic.h / 8) * 1.5}em" alt="">`;
+    },
+    // the money icon, `em` tall, as an <img> tag
+    money(em = 1) {
+      if (!('note' in cache)) cache.note = draw('note');
+      const ic = cache.note;
+      return `<img class="wicon money" src="${ic.url}" style="height:${em}em;width:${em * ic.w / ic.h}em" alt="">`;
     },
     // a big version for the shop: every icon pixel is `px` rem
     big(key, px) {

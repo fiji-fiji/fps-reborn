@@ -94,6 +94,8 @@ class BooBoo {
     this.leaving = 0;
     this.pod.visible = this.tree.visible = this.cloud.visible = this.rain.visible = false;
     this.tree.scale.setScalar(1);
+    this.tree.rotation.set(0, 0, 0);
+    this.fallYaw = null;
   }
 
   drop(pos) {
@@ -113,6 +115,8 @@ class BooBoo {
     this.progress = 0;
     this.tree.position.copy(pos);
     this.tree.scale.setScalar(1);
+    this.tree.rotation.set(0, 0, 0);
+    this.fallYaw = null;
     this.tree.visible = true;
     this.cloud.position.set(pos.x, pos.y + 6.2, pos.z);
     this.cloud.visible = true;
@@ -163,9 +167,14 @@ class BooBoo {
       }
       this.rain.instanceMatrix.needsUpdate = true;
     }
-    if (this.leaving > 0) {                         // uprooted: shrink away
+    if (this.leaving > 0) {                         // uprooted: (tip over, then) shrink away
       this.leaving = Math.max(0, this.leaving - dt);
-      this.tree.scale.setScalar(this.leaving / 0.6);
+      if (this.fallYaw !== null && this.fallYaw !== undefined) {
+        const fall = Math.min(1, (1.4 - this.leaving) / 0.7);
+        const axis = new THREE.Vector3(Math.cos(this.fallYaw), 0, -Math.sin(this.fallYaw));
+        this.tree.quaternion.setFromAxisAngle(axis, fall * fall * Math.PI * 0.48);   // TIMBER!
+        this.tree.scale.setScalar(Math.min(1, this.leaving / 0.6));
+      } else this.tree.scale.setScalar(this.leaving / 0.6);
       if (this.leaving === 0) this.tree.visible = false;
     }
   }
@@ -188,9 +197,12 @@ class BooBoo {
     this.tree.visible = this.cloud.visible = this.rain.visible = false;
   }
 
-  uproot() {
+  // cut down: the tree tips over away from whoever cut it (fallYaw), then shrinks away
+  uproot(fallYaw = null) {
     this.state = 'gone';
-    this.leaving = 0.6;
+    this.leaving = fallYaw === null ? 0.6 : 1.4;
+    this.fallYaw = fallYaw;
+    this.tree.rotation.set(0, 0, 0);
     this.cloud.visible = this.rain.visible = false;
     const c = this.pos.clone();
     c.y += 1;

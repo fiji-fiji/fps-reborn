@@ -71,6 +71,9 @@ const WEAPONS = {
     look: { petal: 0xffffff, petal2: 0xeef0ff, center: 0xffd36b, size: 1, jar: true, long: true },
   },
 };
+// holding the knife makes you move this much faster
+const KNIFE_SPEED = 1.5;
+
 // Everyone always carries one (key 3). Pops in one hit, but only up close.
 WEAPONS.knife = {
   name: 'Frosting Knife', slot: 'knife', price: 0, melee: true,
@@ -261,6 +264,7 @@ class Viewmodel {
     if (!this.models[key]) {
       const d = gun.def;
       this.models[key] = d.bow ? this._buildBow() : d.melee ? this._buildKnife() : this._buildFlower(d.look);
+      this._addPaws(this.models[key]);
       this.camera.add(this.models[key].group);
     }
     for (const m of Object.values(this.models)) m.group.visible = false;
@@ -269,6 +273,66 @@ class Viewmodel {
     this.vm.group.visible = true;
     this.gun = gun;
     this.swapT = 0.35;
+  }
+
+  // Fluffy paws holding the item. `y` = where the back of the paw faces, `z` = where the
+  // forearm goes (both in the item's own space); the toes curl around the grip.
+  _orientPaw(paw, y, z, scale, mirror = false) {
+    const Y = new THREE.Vector3(...y).normalize(), Z = new THREE.Vector3(...z).normalize();
+    const X = new THREE.Vector3().crossVectors(Y, Z).normalize();
+    Z.crossVectors(X, Y).normalize();
+    paw.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
+    paw.scale.set(mirror ? -scale : scale, scale, scale);
+  }
+
+  _addPaws(vm) {
+    const g = vm.group;
+    if (vm.knife) {                                     // fist round the handle
+      const p = makePaw();
+      this._orientPaw(p, [1, 0, 0], [0.2, -1, 0.5], 0.75);
+      p.position.set(0.058, -0.015, 0.02);
+      p.curl(1.45);
+      g.add(p);
+      vm.paw = p;
+    } else if (vm.bow) {                                 // left paw on the grip, right paw on the string
+      const left = makePaw();
+      this._orientPaw(left, [-1, 0, 0], [0, -0.5, 0.87], 1.25, true);
+      left.position.set(-0.06, -0.02, -0.1);
+      left.curl(1.4);
+      g.add(left);
+      const right = makePaw();
+      this._orientPaw(right, [1, 0, 0], [0.2, -0.35, 1], 1.15);
+      right.curl(1.2);
+      g.add(right);
+      vm.paw = left;
+      vm.pullPaw = right;
+    } else {                                             // right paw round the flower's grip
+      const p = makePaw();
+      this._orientPaw(p, [1, 0.25, 0], [0.45, -0.75, 1], 1.0);
+      p.position.set(0.06, -0.13, 0.2);
+      p.curl(1.35);
+      g.add(p);
+      vm.paw = p;
+      // the other paw supports the stem from underneath (it leaves to do the refill shows)
+      const s = makePaw();
+      this._orientPaw(s, [-0.55, -1, 0], [-0.5, -0.55, 1], 0.95, true);
+      s.position.set(-0.05, -0.075, -0.02);
+      s.curl(1.1);
+      g.add(s);
+      vm.supportPaw = s;
+    }
+  }
+
+  // a paw under the seed / grenade you're holding (palm up)
+  _holdPaw() {
+    if (!this.holdPawModel) {
+      const p = makePaw();
+      this._orientPaw(p, [0, -1, 0], [0.35, -0.45, 1], 0.6);
+      p.curl(0.55);
+      this.camera.add(p);
+      this.holdPawModel = p;
+    }
+    return this.holdPawModel;
   }
 
   // How full the jar is, in %, on a little tag stuck to the front of the jar.
@@ -388,8 +452,10 @@ class Viewmodel {
   // Left hand (painted nails, sleeve, bracelet) holding a soap bottle, used for refilling.
   _buildHand(vm) {
     const lam = (hex, o = {}) => new THREE.MeshLambertMaterial({ color: hex, ...o });
-    const skin = lam(0xf2c6a0), nail = lam(0xff3d8b, { emissive: 0x551030 });
-    const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xc9a7ff, 16, 8, 21) });
+    // a fluffy paw (white fur, pink claws) in a team sleeve
+    const skin = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 14, 8, 41), color: BICHON.fur, emissive: DOG_GLOW });
+    const nail = lam(0xff3d8b, { emissive: 0x551030 });
+    const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 20, 8, 43), color: PAW.sleeve });
     const gold = lam(0xffd36b, { emissive: 0x403010 });
     const bottleMat = lam(0xfff1a6, { emissive: 0x2a2410 });
     const cap = lam(0xffffff);
@@ -408,14 +474,14 @@ class Viewmodel {
     add(held, BW, 0.085, BW, bottleMat, 0, 0, 0);
     add(held, 0.022, 0.02, 0.022, cap, 0, 0.052, 0);
     vm.spout = add(held, 0.012, 0.016, 0.012, cap, 0, 0.07, 0);
-    add(held, 0.022, 0.075, 0.06, skin, -BW / 2 - 0.011, -0.004, 0);   // palm
-    for (let i = 0; i < 4; i++) {                                       // fingers + painted nails
-      const y = 0.026 - i * 0.017;
-      const len = i === 3 ? 0.04 : 0.05;
-      add(held, len, 0.014, 0.014, skin, -BW / 2 + len / 2 - 0.006, y, BW / 2 + 0.007);
-      add(held, 0.009, 0.012, 0.004, nail, -BW / 2 + len - 0.01, y, BW / 2 + 0.0155);
+    add(held, 0.03, 0.08, 0.066, skin, -BW / 2 - 0.014, -0.004, 0);    // paw
+    for (let i = 0; i < 4; i++) {                                       // chubby toes + painted claws
+      const y = 0.027 - i * 0.018;
+      const len = i === 3 ? 0.036 : 0.044;
+      add(held, len, 0.019, 0.02, skin, -BW / 2 + len / 2 - 0.008, y, BW / 2 + 0.009);
+      add(held, 0.009, 0.011, 0.006, nail, -BW / 2 + len - 0.008, y, BW / 2 + 0.02);
     }
-    add(held, 0.04, 0.016, 0.016, skin, -0.008, 0.02, -BW / 2 - 0.008);   // thumb
+    add(held, 0.036, 0.02, 0.02, skin, -0.008, 0.02, -BW / 2 - 0.01);   // dewclaw
 
     const arm = new THREE.Group();                                      // wrist, bracelet, sleeve
     arm.rotation.set(-0.75, 0, -0.3);
@@ -474,6 +540,9 @@ class Viewmodel {
     }
     this.seedModel.visible = on;
     if (on && this.vm) this.vm.group.visible = false;
+    const paw = this._holdPaw();
+    if (on) { paw.visible = true; paw.position.set(0.215, -0.235, -0.39); }
+    else if (!this.nadeKind) paw.visible = false;
   }
 
   // Rose bow: green limbs with thorns, pink roses at the tips, a string that
@@ -548,6 +617,8 @@ class Viewmodel {
     }
     for (const [k, m] of Object.entries(this.nadeModels)) m.visible = k === kind;
     if (this.vm) this.vm.group.visible = !kind;
+    if (kind) this._holdPaw().visible = true;
+    else if (!(this.seedModel && this.seedModel.visible) && this.holdPawModel) this.holdPawModel.visible = false;
     if (kind !== this.nadeKind) { this.nadeKind = kind; this.swapT = 0.3; }
   }
 
@@ -561,7 +632,8 @@ class Viewmodel {
     this.bobPhase += dt * speed * 1.6;
     const bob = Math.sin(this.bobPhase) * 0.01 * Math.min(1, speed / PLAYER.runSpeed);
     m.position.set(0.2 + bob, -0.17 - this.swapT * 0.5 - this.kick * 0.3, -0.45);
-    m.rotation.y += dt * 1.2;
+    m.rotation.set(0.2, 0.5, 0);
+    this._holdPaw().position.set(0.21 + bob, -0.222 - this.swapT * 0.5 - this.kick * 0.3, -0.42);
   }
 
   onFire() {
@@ -630,6 +702,7 @@ class Viewmodel {
     } else this.sassy.hide();
 
     vm.hand.visible = reloading && ph.reach > 0.001;
+    if (vm.supportPaw) vm.supportPaw.visible = !reloading;   // that paw is busy refilling
     vm.stream.visible = false;
     if (vm.hand.visible) {
       vm.hand.position.lerpVectors(vm.handAway, vm.handPour, ph.reach);
@@ -665,5 +738,6 @@ class Viewmodel {
     const nocking = gun.reloading > 0;
     vm.arrow.visible = gun.ammo > 0 && !nocking;
     vm.arrow.position.z = nockZ;
+    if (vm.pullPaw) vm.pullPaw.position.set(0.045, -0.02, nockZ + 0.05);   // the paw that draws the string
   }
 }

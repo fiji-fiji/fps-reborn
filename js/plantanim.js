@@ -61,24 +61,16 @@ class PlantAnim {
     add(this.shovel, 0.14, 0.035, 0.035, lam(0xb5835a), 0, 1.08, 0);           // grip
     this.clump = add(this.shovel, 0.14, 0.06, 0.1, dirt, 0, 0.06, 0.03);         // dirt on the blade
 
-    // two hands (palm down, nails on top so you see them from above). A is the left one.
-    const skin = lam(0xf2c6a0), nail = lam(0xff3d8b, 0x551030), gold = lam(0xffd36b, 0x403010);
-    const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xc9a7ff, 16, 8, 21) });
+    // two fluffy paws (palm down, painted claws on top so you see them from above).
+    // They're coloured like whoever is planting (white Bichon fluff, or the cat's coat).
     const makeHand = mirror => {
-      const h = piv(G, 0, 0.3, 0.5);
-      h.scale.set(mirror ? -0.8 : 0.8, 0.8, 0.8);     // the hands are a bit small and dainty
-      add(h, 0.11, 0.035, 0.12, skin, 0, 0, 0);                                     // palm
-      h.userData.nails = [];
-      for (let i = 0; i < 4; i++) {
-        const x = 0.04 - i * 0.027, len = [0.085, 0.095, 0.085, 0.07][i];
-        add(h, 0.022, 0.024, len, skin, x, 0, -0.06 - len / 2);
-        h.userData.nails.push(add(h, 0.018, 0.006, 0.022, nail, x, 0.014, -0.06 - len + 0.012));
-      }
-      add(h, 0.024, 0.024, 0.07, skin, 0.07, -0.004, -0.02).rotation.y = -0.5;   // thumb
-      add(h, 0.12, 0.02, 0.04, gold, 0, 0, 0.075);                                 // bracelet
-      add(h, 0.13, 0.06, 0.3, sleeve, 0, 0, 0.24);
+      const h = makePaw({ shadow: true });
+      h.position.set(0, 0.3, 0.5);
+      h.scale.set(mirror ? -0.8 : 0.8, 0.8, 0.8);
+      G.add(h);
       return h;
     };
+    const nail = lam(0xff3d8b, 0x551030), gold = lam(0xffd36b, 0x403010);
     this.hand = makeHand(false);
     this.handB = makeHand(true);
     this.seed = makeSeedPod();
@@ -131,7 +123,7 @@ class PlantAnim {
     add(this.perfume, 0.008, 0.008, 0.02, gold, 0, 0.052, -0.018);         // nozzle
     this.nozzle = new THREE.Vector3(0, -0.07 + 0.052, -0.1 - 0.03);
 
-    this.looseNail = add(G, 0.018 * 0.8, 0.006 * 0.8, 0.022 * 0.8, nail, 0, 0, 0);
+    this.looseNail = add(G, 0.012 * 0.8, 0.009 * 0.8, 0.018 * 0.8, nail, 0, 0, 0);
 
     // sprout
     this.sprout = piv(G, 0, 0.08, 0);
@@ -176,6 +168,8 @@ class PlantAnim {
     this.active = true;
     this.lastP = 0;
     this.planter = e;
+    const c = pawColors(e);
+    for (const h of [this.hand, this.handB]) { h.setFur(c.fur); h.setSleeve(c.sleeve); }
     const options = PLANT_STYLES.filter(s => s !== this.style);
     this.style = this.forceStyle || options[Math.floor(Math.random() * options.length)];
     this.nailOff = false;
@@ -231,7 +225,7 @@ class PlantAnim {
   _at(hand, local) { return local.clone().multiply(hand.scale).applyQuaternion(hand.quaternion).add(hand.position); }
   // move a hand so that `local` (a point on it) lands on `target`
   _put(hand, local, target) { hand.position.copy(target).sub(local.clone().multiply(hand.scale).applyQuaternion(hand.quaternion)); }
-  _tip(i) { return new THREE.Vector3(0.04 - i * 0.027, 0.004, -0.06 - [0.085, 0.095, 0.085, 0.07][i]); }   // under nail i
+  _tip(i) { return PAW.tip(i); }   // just under claw i
 
   _snd(name, ...args) { if (this.vol > 0.12 && Sound[name]) Sound[name](...args); }
 
@@ -389,7 +383,7 @@ class PlantAnim {
     if (crossed(PLANT_TIMING.quick[0] * 0.8) && !this.nailOff) {            // ping! there goes a nail
       this.nailOff = true;
       A.userData.nails[1].visible = false;
-      this.nailPos = this._at(A, V(0.013, 0.014, -0.143));
+      this.nailPos = this._at(A, V(0.013, 0.008, -0.094));
       this.nailVel = V(0.5, 1.3, 0.4);
       this.nailRest = false;
       this._snd('oops');
@@ -593,10 +587,10 @@ class PlantAnim {
     let tipTarget;
     if (f < 0.3) tipTarget = V(0.3, 0.3, 0.3).lerp(nailAt.clone().add(V(0, 0.01, 0)), ease01(f / 0.3));   // pick it up
     else if (f < 0.6) {                                                                                       // bring it over
-      const slot = this._at(A, V(0.013, 0.016, -0.143));
+      const slot = this._at(A, V(0.013, 0.008, -0.094));
       tipTarget = nailAt.clone().add(V(0, 0.01, 0)).lerp(slot, ease01(span(f, 0.3, 0.55)));
       B.rotation.set(0.3, -0.7, 0);
-    } else tipTarget = this._at(A, V(0.013, 0.016, -0.143)).add(V(0.25, -0.25, 0.1).multiplyScalar(ease01(span(f, 0.65, 0.85))));
+    } else tipTarget = this._at(A, V(0.013, 0.008, -0.094)).add(V(0.25, -0.25, 0.1).multiplyScalar(ease01(span(f, 0.65, 0.85))));
     this._put(B, this._tip(0), tipTarget);
     B.visible = f < 0.88;
     if (f > 0.3 && f < 0.6) { this.looseNail.position.copy(this._at(B, this._tip(0)).add(V(0, 0.008, 0))); this.nailRest = true; }
@@ -605,7 +599,7 @@ class PlantAnim {
       A.userData.nails[1].visible = true;
       this._snd('tap');
       this._snd('ting');
-      this._sparkle(this._at(A, V(0.013, 0.016, -0.143)), 8);
+      this._sparkle(this._at(A, V(0.013, 0.008, -0.094)), 8);
     }
     if (f > 0.65) A.rotation.z = 0.15 + Math.sin(f * 40) * 0.12;   // admire it
   }

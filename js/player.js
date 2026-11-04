@@ -85,6 +85,7 @@ class Mover {
     let speed = PLAYER.runSpeed;
     if (this.walking) speed = PLAYER.walkSpeed;
     if (this.crouch > 0.5) speed = PLAYER.crouchSpeed;
+    speed *= this.speedMul || 1;                      // e.g. knife out: 1.5x faster
 
     // --- accelerate toward wished velocity ---
     const tx = wx * speed, tz = wz * speed;

@@ -31,6 +31,7 @@ const HUD = {
       out: $('outMsg'), outBy: $('outBy'), outWhen: $('outWhen'),
       dazzle: $('dazzle'), haze: $('haze'), board: $('scoreboard'), ammoLabel: $('ammoLabel'),
     };
+    $('moneyIcon').innerHTML = WeaponIcons.money(1.15);   // doggy bank notes
     this.dazzleLeft = 0;
     this.dazzleTotal = 1;
     this.hitTime = 0;
@@ -120,7 +121,7 @@ const HUD = {
       .map(e => `<tr class="${e.alive ? '' : 'out'}${e === me ? ' me' : ''}">
         <td style="color:${TEAM_CSS[e.team]}">${e.name}${e.carrying && team === me.team ? ' ✿' : ''}</td>
         <td>${e.stats.pops}</td><td>${e.stats.outs}</td>
-        <td>${team === me.team && game.mode.kind === 'standard' ? '🪙 ' + fmtMoney(e.money) : ''}</td></tr>`).join('');
+        <td>${team === me.team && game.mode.kind === 'standard' ? WeaponIcons.money(0.9) + ' ' + fmtMoney(e.money) : ''}</td></tr>`).join('');
     const html = `<table><tr><th>YOUR TEAM</th><th>Pops</th><th>Outs</th><th></th></tr>${rows(me.team)}</table>
       <table><tr><th>ENEMY</th><th>Pops</th><th>Outs</th><th></th></tr>${rows(otherTeam(me.team))}</table>`;
     if (html !== this._lastBoard) { el.innerHTML = html; this._lastBoard = html; }

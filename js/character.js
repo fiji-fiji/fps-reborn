@@ -58,6 +58,7 @@ class CharacterModel {
     const coat = CAT_COATS[seed % CAT_COATS.length];
     // dogs and cats have furry bodies: fur legs and arms, paws, and team clothes on top
     const fur = species === 'dog' ? BICHON.fur : species === 'cat' ? coat[0] : null;
+    this.fur = fur;                                   // paws (planting, chainsaw) use the same fur
     const C = this.colors = {
       shirt: o.shirt || 0xff8fb1, pants: fur || o.pants || 0x5b6fa8,
       skin: fur || o.skin || 0xf0c8a0, hair: o.hair || 0x6b4a2b,

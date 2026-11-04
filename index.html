@@ -59,7 +59,7 @@
     <div id="action"><div id="actionLabel"></div><div class="bar"><div id="actionFill"></div></div></div>
     <div id="hint"></div>
 
-    <div id="money" class="box">🪙 <span id="moneyNum">0</span> <span id="moneyGain"></span></div>
+    <div id="money" class="box"><span id="moneyIcon"></span> <span id="moneyNum">0</span> <span id="moneyGain"></span></div>
     <div id="healthBox" class="box">
       <div class="statLabel">HEALTH</div>
       <div class="statRow"><span class="heart">&#9829;</span><span id="health">100</span><span id="shieldBadge"></span></div>
@@ -90,7 +90,7 @@
       <div class="shopGrid" id="shopShields"></div>
       <div class="shopSection">UTILITY (press <kbd>5</kbd> to hold one, <kbd>Click</kbd> to throw far, <kbd>Right-click</kbd> to throw short)</div>
       <div class="shopGrid" id="shopUtility"></div>
-      <div class="shopFoot">Click a card to buy it. Changed your mind? Buying another one gives your money back.
+      <div class="shopFoot">Click a card to buy it. Changed your mind? Right-click it to sell it back.
         <br><button id="shopDone" class="pickBtn">Done <kbd>B</kbd></button></div>
     </div>
   </div>
@@ -107,7 +107,7 @@
           <li>You're a fluffy dog on the <b style="color:#5aa8ff">blue team</b>. Pop the <b style="color:#ff5a5a">red team</b> of cats with bubbles!</li>
           <li><b>Attacking:</b> carry the seed to site <b>A</b> or <b>B</b> and hold <kbd>E</kbd> to plant it.</li>
           <li><b>Defending:</b> stop them, or hold <kbd>E</kbd> next to their tree to uproot it.</li>
-          <li>Win rounds to earn coins, then press <kbd>B</kbd> at the start of a round to shop.</li>
+          <li>Win rounds to earn doggy bank notes, then press <kbd>B</kbd> at the start of a round to shop.</li>
           <li>First team to <b>13 rounds</b> wins (<b>5</b> in Swiftplay). Follow the floating labels if you're lost!</li>
         </ul>
       </div>
@@ -173,6 +173,7 @@
   <script src="js/player.js"></script>
   <script src="js/weapons.js"></script>
   <script src="js/character.js"></script>
+  <script src="js/paws.js"></script>
   <script src="js/dummy.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/bot.js"></script>
@@ -182,6 +183,7 @@
   <script src="js/grenades.js"></script>
   <script src="js/sassy.js"></script>
   <script src="js/plantanim.js"></script>
+  <script src="js/chainsaw.js"></script>
   <script src="js/music.js"></script>
   <script src="js/icons.js"></script>
   <script src="js/hud.js"></script>

@@ -1,7 +1,7 @@
 // Tiny synthesized, cheerful sound effects (no audio files needed).
 
 const Sound = (() => {
-  let ctx = null, master = null, noiseBuf = null, volume = 0.7;
+  let ctx = null, master = null, noiseBuf = null, volume = 0.7, saw = null;
 
   function init() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -69,6 +69,40 @@ const Sound = (() => {
     pour(vol = 1) { if (!on() || vol < 0.05) return; noise(0.05, 1800 + Math.random() * 800, 0.05 * vol, 'bandpass'); },
     sip(vol = 1) { if (!on() || vol < 0.05) return; noise(0.35, 1200, 0.18 * vol, 'bandpass'); tone(500, 0.3, 0.05 * vol, 'sine', 900); },
     spritz(vol = 1) { if (!on() || vol < 0.05) return; noise(0.18, 6000, 0.25 * vol, 'highpass'); },
+    // chainsaw: call every frame while sawing (vol 0 turns it off). rev 0..1 = idle..cutting
+    chainsaw(vol, rev = 1) {
+      if (!on()) return;
+      const t = ctx.currentTime;
+      if (vol <= 0) {
+        if (saw) {
+          const s = saw; saw = null;
+          s.g.gain.setTargetAtTime(0, t, 0.06);
+          setTimeout(() => { try { s.o1.stop(); s.o2.stop(); s.lfo.stop(); } catch (e) {} }, 400);
+        }
+        return;
+      }
+      if (!saw) {
+        const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+        o1.type = 'sawtooth'; o2.type = 'square'; lfo.type = 'sine';
+        o1.frequency.value = 90; o2.frequency.value = 181; lfo.frequency.value = 24;
+        lfoGain.gain.value = 14;
+        lfo.connect(lfoGain); lfoGain.connect(o1.frequency); lfoGain.connect(o2.frequency);
+        f.type = 'lowpass'; f.frequency.value = 1600;
+        g.gain.value = 0;
+        o1.connect(f); o2.connect(f); f.connect(g).connect(master);
+        o1.start(); o2.start(); lfo.start();
+        saw = { o1, o2, lfo, f, g };
+      }
+      saw.g.gain.setTargetAtTime(vol * (0.16 + rev * 0.12), t, 0.05);
+      saw.o1.frequency.setTargetAtTime(80 + rev * 55, t, 0.15);
+      saw.o2.frequency.setTargetAtTime(161 + rev * 110, t, 0.15);
+      saw.f.frequency.setTargetAtTime(1100 + rev * 1600, t, 0.15);
+    },
+    // yanking the chainsaw's pull cord: zzzip, put-put
+    pullCord(vol = 1) { if (!on()) return; noise(0.12, 2200, 0.25 * vol, 'bandpass'); tone(70, 0.12, 0.3 * vol, 'sawtooth', 50, 0.1); tone(75, 0.08, 0.25 * vol, 'sawtooth', 55, 0.24); },
+    timber(vol = 1) { if (!on()) return; tone(220, 0.6, 0.2 * vol, 'triangle', 90); noise(0.5, 400, 0.4 * vol, 'lowpass', 0.45); tone(60, 0.4, 0.45 * vol, 'sine', 30, 0.45); },
+    sell() { if (!on()) return; tone(1400, 0.08, 0.15, 'triangle', 700); tone(900, 0.12, 0.12, 'triangle', 500, 0.07); },
     sprout() { if (!on()) return; tone(300, 0.25, 0.25, 'sine', 1200); },
     swish() { if (!on()) return; noise(0.15, 2500, 0.25, 'bandpass'); },
 

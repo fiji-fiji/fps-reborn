@@ -44,6 +44,7 @@ class StandardMode {
     this.attackTeam = game.playerTeam;   // you attack first
     this.boo = new BooBoo(game.scene, game.effects);
     this.plantAnim = new PlantAnim(game);
+    this.saw = new ChainsawAnim(game);              // uprooting = cutting the tree down
     this.barriers = new SpawnBarriers(game);
     this.phase = 'prep';
     this.timeLeft = 0;
@@ -104,6 +105,7 @@ class StandardMode {
     g.drops.clear();
     g.throwables.clear();
     this.plantAnim.cancel();
+    this.saw.cancel();
     this.boo.reset();
     // If you're attacking, the seed waits on the ground next to you so you can pick it up.
     // Otherwise a random attacker starts with it.
@@ -187,6 +189,7 @@ class StandardMode {
     if (this.phase === 'end' || this.phase === 'over') return;
     this.score[winner]++;
     // someone mid-plant keeps planting: the seed can still go in after the round is decided
+    if (!(winner === this.defendTeam && this.defuser && this.defuseProgress >= BOOBOO.uprootTime)) this.saw.cancel();
     this.defuser = null;
     this.defuseProgress = 0;
     const loser = otherTeam(winner);
@@ -374,12 +377,14 @@ class StandardMode {
       if (e === this.defuser) break;
     }
     if (d && d === this.defuser) this.defuseProgress += dt;
-    else if (d) { this.defuser = d; this.defuseProgress = dt; Sound.dig(this.game._volumeAt(d.pos)); }
-    else { this.defuser = null; this.defuseProgress = 0; }
+    else if (d) { this.defuser = d; this.defuseProgress = dt; this.saw.start(d, b.pos); }   // pull the cord…
+    else { this.defuser = null; this.defuseProgress = 0; this.saw.cancel(); }
+    if (this.defuser) this.saw.update(Math.min(1, this.defuseProgress / BOOBOO.uprootTime), dt);
     if (this.defuseProgress >= BOOBOO.uprootTime) {
-      b.uproot();
-      Sound.uproot();
-      this.endRound(this.defendTeam, 'The tree was uprooted!');
+      b.uproot(this.saw.fallYaw);                  // TIMBER!
+      this.saw.finish();
+      Sound.timber(0.4 + 0.6 * this.game._volumeAt(b.pos));
+      this.endRound(this.defendTeam, 'The tree was cut down!');
     }
   }
 
@@ -414,7 +419,7 @@ class StandardMode {
       this.version++;
     }
     if (victim === this.planter) { this.planter = null; this.plantProgress = 0; this.plantAnim.cancel(); }
-    if (victim === this.defuser) { this.defuser = null; this.defuseProgress = 0; }
+    if (victim === this.defuser) { this.defuser = null; this.defuseProgress = 0; this.saw.cancel(); }
     if (attacker && attacker.team !== victim.team) this._pay(attacker, ECON.pop);
     HUD.feed(attacker, victim, part === 'head', weapon);
     if (victim.isPlayer) HUD.showOut(attacker ? attacker.name : 'the blooming tree', null);
@@ -513,14 +518,14 @@ class StandardMode {
       return `Go with your team to site ${this.planSite}`;
     }
     if (b.state === 'planted') {
-      return flatDist(me.pos, b.pos) <= BOOBOO.uprootReach ? 'Hold [E] to uproot the tree' : `The seed is planted on ${this.plantedSite}! Go uproot it`;
+      return flatDist(me.pos, b.pos) <= BOOBOO.uprootReach ? 'Hold [E] to chainsaw the tree down' : `The seed is planted on ${this.plantedSite}! Go uproot it`;
     }
     return 'Guard sites A and B. Stop the enemy planting!';
   }
 
   actionFor(me) {
     if (this.planter === me) return { label: 'Planting the seed…', frac: this.plantProgress / BOOBOO.plantTime };
-    if (this.defuser === me) return { label: 'Uprooting…', frac: this.defuseProgress / BOOBOO.uprootTime };
+    if (this.defuser === me) return { label: 'Cutting it down… VRRRM', frac: this.defuseProgress / BOOBOO.uprootTime };
     return null;
   }
 

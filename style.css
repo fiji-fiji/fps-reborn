@@ -375,5 +375,6 @@ body.shopping #hud { display: none; }
 
 /* pop feed weapon icons */
 .feedRow { display: flex; align-items: center; gap: .1rem; }
+.wicon.money { filter: drop-shadow(0 .06rem 0 rgba(0,0,0,.6)); vertical-align: -0.12em; }
 .wicon { image-rendering: pixelated; vertical-align: middle; filter: drop-shadow(0 .08rem 0 rgba(0,0,0,.7)); }
 .headIcon { color: var(--gold); margin-left: .3rem; }
