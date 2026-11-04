@@ -78,6 +78,43 @@ const ICON_ART = {
     '.cCCCCc.',
     '..cCCc..',
   ],
+  // shop: shields + the other grenades
+  light: [
+    '.cCCCCc.',
+    'cCWCCCCc',
+    'CWCCCCCC',
+    'CCCCCCCC',
+    '.CCCCCC.',
+    '..CCCC..',
+    '...CC...',
+  ],
+  heavy: [
+    '..cCCCCCCc..',
+    '.cCWWCCCCCc.',
+    'cCWCCCCCCCCc',
+    'CCWCCCCCCCCC',
+    'CCCCCCCCCCCC',
+    '.CCCCCCCCCC.',
+    '..CCCCCCCC..',
+    '...CCCCCC...',
+    '....CCCC....',
+  ],
+  smoke: [
+    '...SWW.....',
+    '..SWWWWSW..',
+    '.SWWWWWWWW.',
+    'SWWWWWWWWWS',
+    '.SSWWWSSSS.',
+  ],
+  flash: [
+    '....y....',
+    '....y....',
+    '...yYy...',
+    'yyyYWYyyy',
+    '...yYy...',
+    '....y....',
+    '....y....',
+  ],
   tree: [
     '..LPL...',
     '.LLLLL..',
@@ -115,6 +152,13 @@ const WeaponIcons = (() => {
       const ic = cache[key];
       if (!ic) return '';
       return `<img class="wicon" src="${ic.url}" style="height:${(ic.h / 8) * 1.5}em" alt="">`;
+    },
+    // a big version for the shop: every icon pixel is `px` rem
+    big(key, px) {
+      if (!(key in cache)) cache[key] = draw(key);
+      const ic = cache[key];
+      if (!ic) return '';
+      return `<img class="wicon big" src="${ic.url}" style="height:${ic.h * px}rem;width:${ic.w * px}rem" alt="">`;
     },
   };
 })();

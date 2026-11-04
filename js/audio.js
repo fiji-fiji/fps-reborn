@@ -51,11 +51,24 @@ const Sound = (() => {
     // ---- sassy refills ----
     snap() { if (!on()) return; noise(0.04, 3500, 0.5, 'highpass'); tone(2400, 0.03, 0.15, 'square', 1800); },
     file() { if (!on()) return; noise(0.07, 3000, 0.12, 'bandpass'); },
-    blow() { if (!on()) return; noise(0.45, 600, 0.18, 'lowpass'); },
     brush() { if (!on()) return; noise(0.05, 5000, 0.06, 'highpass'); },
-    pew() { if (!on()) return; tone(1200, 0.18, 0.2, 'square', 300); },
     tap() { if (!on()) return; tone(420 + Math.random() * 120, 0.04, 0.14, 'triangle', 300); },
     heart() { if (!on()) return; tone(1568, 0.12, 0.13, 'triangle'); tone(2093, 0.2, 0.13, 'triangle', 2093, 0.08); },
+    // sunglasses flip: a bright "ting"
+    ting() { if (!on()) return; tone(2637, 0.25, 0.1, 'triangle'); tone(3520, 0.3, 0.08, 'triangle', 3520, 0.05); },
+    // ---- clumsy refills ----
+    knock(v = 1) { if (!on()) return; tone(190, 0.07, 0.35 * v, 'triangle', 120); noise(0.03, 900, 0.25 * v, 'lowpass'); },
+    boop(p = 1) { if (!on()) return; tone(500 * p, 0.12, 0.2, 'sine', 900 * p); },
+    oops() { if (!on()) return; tone(900, 0.12, 0.12, 'triangle', 600); tone(700, 0.15, 0.1, 'triangle', 450, 0.1); },
+    corkPop() { if (!on()) return; tone(900, 0.06, 0.3, 'sine', 300); noise(0.05, 2500, 0.25, 'highpass'); },
+    plop() { if (!on()) return; tone(300, 0.1, 0.25, 'sine', 900); noise(0.08, 1200, 0.08, 'lowpass', 0.03); },
+    // ---- planting shows ----
+    stab(vol = 1) { if (!on() || vol < 0.05) return; tone(160, 0.08, 0.3 * vol, 'triangle', 90); noise(0.06, 800, 0.2 * vol, 'lowpass'); },
+    chop(vol = 1) { if (!on() || vol < 0.05) return; tone(120, 0.25, 0.45 * vol, 'sine', 45); noise(0.25, 700, 0.35 * vol, 'lowpass'); },
+    drill(vol = 1) { if (!on() || vol < 0.05) return; tone(180, 0.4, 0.07 * vol, 'sawtooth', 240); tone(360, 0.4, 0.04 * vol, 'square', 420); },
+    pour(vol = 1) { if (!on() || vol < 0.05) return; noise(0.05, 1800 + Math.random() * 800, 0.05 * vol, 'bandpass'); },
+    sip(vol = 1) { if (!on() || vol < 0.05) return; noise(0.35, 1200, 0.18 * vol, 'bandpass'); tone(500, 0.3, 0.05 * vol, 'sine', 900); },
+    spritz(vol = 1) { if (!on() || vol < 0.05) return; noise(0.18, 6000, 0.25 * vol, 'highpass'); },
     sprout() { if (!on()) return; tone(300, 0.25, 0.25, 'sine', 1200); },
     swish() { if (!on()) return; noise(0.15, 2500, 0.25, 'bandpass'); },
 

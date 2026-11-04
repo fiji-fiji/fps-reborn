@@ -6,6 +6,7 @@ const Input = {
   pressed: new Set(),    // keys pressed this frame
   mouseDX: 0, mouseDY: 0,
   mouseDown: false,
+  clicked: false,        // left button went down since last frame (even if already let go)
   locked: false,
 
   init(canvas) {
@@ -26,7 +27,7 @@ const Input = {
     });
     document.addEventListener('mousedown', e => {
       if (!this.locked) return;
-      if (e.button === 0) this.mouseDown = true;
+      if (e.button === 0) { this.mouseDown = true; this.clicked = true; }
       if (e.button === 2) this.rightDown = true;
     });
     document.addEventListener('mouseup', e => {
@@ -46,6 +47,7 @@ const Input = {
 
   endFrame() {
     this.pressed.clear();
+    this.clicked = false;
     this.mouseDX = 0;
     this.mouseDY = 0;
   },

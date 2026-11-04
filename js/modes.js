@@ -1,5 +1,6 @@
 // Game modes: the rules of a match and what the bots should be doing.
 //   StandardMode  — rounds with the Boo-Boo, money + shop, first to 13 (win by two)
+//                   (also Swiftplay: same rounds, first to 5, sides swap after 4)
 //   SkirmishMode  — team fight with respawns
 //   PracticeMode  — practice garden with buddies (free shop)
 // Every mode answers the same questions for the rest of the game:
@@ -14,6 +15,8 @@ const ROUND = {
   toWin: 13,        // first to 13…
   half: 12,         // sides swap after 12 rounds (and every round in overtime)
 };
+// Swiftplay: a short match. First to 5, sides swap after round 4; at 4-4 round 9 decides it.
+const SWIFTPLAY = { name: 'Swiftplay', toWin: 5, half: 4, winByTwo: false };
 const ECON = { start: 800, win: 3000, loss: [1900, 2400, 2900], pop: 200, plant: 300 };
 
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -28,8 +31,9 @@ function siteCenter(r) { return { x: (r.x0 + r.x1 + 1) / 2, z: (r.z0 + r.z1 + 1)
 
 // ---------------------------------------------------------------------------
 class StandardMode {
-  constructor(game) {
+  constructor(game, rules = {}) {
     this.game = game;
+    this.rules = Object.assign({ name: 'Standard', toWin: ROUND.toWin, half: ROUND.half, winByTwo: true }, rules);
     game.mode = this;              // spawning below needs to know the mode
     this.kind = 'standard';
     this.freeShop = false;
@@ -63,37 +67,58 @@ class StandardMode {
     return null;
   }
 
+  // The least `e` will have next round: what's left now + the pay for losing this one.
+  minNextMoney(e) {
+    if (this.round === this.rules.half) return ECON.start;       // halftime: everyone restarts at the start money
+    const lossPay = ECON.loss[Math.min(this.lossStreak[e.team], ECON.loss.length - 1)];
+    return Math.min(MAX_MONEY, e.money + lossPay);
+  }
+
   _pay(e, amount) { e.money = Math.min(MAX_MONEY, e.money + amount); if (e.isPlayer) HUD.moneyGain(amount); }
 
   // ---------------- round flow ----------------
   startRound() {
     const g = this.game;
     this.round++;
+    const R = this.rules;
+    const overtime = R.winByTwo && this.round > R.half * 2;
     let swapped = false;
-    if (this.round === ROUND.half + 1 || this.round > ROUND.half * 2) {
+    if (this.round === R.half + 1 || overtime) {
       this.attackTeam = otherTeam(this.attackTeam);
       swapped = true;
     }
-    const halftime = this.round === ROUND.half + 1;
+    const halftime = this.round === R.half + 1;
     for (const e of this._players()) {
       // popped last round (or halftime): back to just the Dandelion
       if (halftime) { resetLoadout(e); e.money = ECON.start; }
       else if (!e.survived) resetLoadout(e);
       refillLoadout(e);
       e.carrying = false;
+      e.hadSeed = false;
       e.actionHeld = false;
       e.survived = false;
       g.spawnAt(e);
     }
     if (halftime) this.lossStreak = { blue: 0, red: 0 };
     g.arrows.clear();
+    g.drops.clear();
     g.throwables.clear();
     this.plantAnim.cancel();
     this.boo.reset();
-    const carrier = pick(this.members(this.attackTeam));
-    carrier.carrying = true;
-    this.boo.state = 'carried';
-    this.boo.carrier = carrier;
+    // If you're attacking, the seed waits on the ground next to you so you can pick it up.
+    // Otherwise a random attacker starts with it.
+    const me = g.player;
+    this.seedForMe = !!(me && me.team === this.attackTeam);
+    this.botsMayTake = !this.seedForMe;
+    let carrier = null;
+    this.boo.carrier = null;
+    if (this.seedForMe) this.boo.drop(this._seedSpot(me));
+    else {
+      carrier = pick(this.members(this.attackTeam));
+      carrier.carrying = true;
+      this.boo.state = 'carried';
+      this.boo.carrier = carrier;
+    }
 
     // bot plan for this round
     this.planSite = pick(Object.keys(this.sites));
@@ -112,6 +137,7 @@ class StandardMode {
 
     this.planter = null; this.plantProgress = 0;
     this.defuser = null; this.defuseProgress = 0;
+    this.funPlant = false;
     this.phase = 'prep';
     this.timeLeft = this.round === 1 ? 5 : ROUND.buy;   // round 1: nothing much to buy, start right away
     this.version++;
@@ -120,12 +146,12 @@ class StandardMode {
     HUD.hideOut();
     const mySide = this.sideOf(g.playerTeam);
     let title = `ROUND ${this.round}`;
-    if (this.round > ROUND.half * 2) title += ' · OVERTIME';
+    if (overtime) title += ' · OVERTIME';
     let sub = mySide === 'attack' ? 'Your team ATTACKS: plant the seed on A or B' : 'Your team DEFENDS: stop them planting the seed';
     if (swapped && halftime) sub = 'Halftime! Teams switched sides. ' + sub;
     for (const t of ['blue', 'red']) {
       const s = this.score[t] + 1, o = this.score[otherTeam(t)];
-      if (s >= ROUND.toWin && s - o >= 2) { title += ' · MATCH POINT'; break; }
+      if (s >= R.toWin && (s - o >= 2 || !R.winByTwo)) { title += ' · MATCH POINT'; break; }
     }
     HUD.banner(title, sub, 4);
     if (halftime) HUD.openShopSoon();                          // fresh money after halftime: show the shop
@@ -134,7 +160,7 @@ class StandardMode {
   // Bots spend their money: save when poor, rifles + shields when rich, a few bows and lilies.
   _botsBuy() {
     const g = this.game;
-    const pistolRound = this.round === 1 || this.round === ROUND.half + 1;
+    const pistolRound = this.round === 1 || this.round === this.rules.half + 1;
     for (const b of g.bots) {
       if (!b.guns.main && !pistolRound) {
         const m = b.money, opts = [];
@@ -160,10 +186,12 @@ class StandardMode {
   endRound(winner, reason) {
     if (this.phase === 'end' || this.phase === 'over') return;
     this.score[winner]++;
-    this.planter = this.defuser = null;
-    this.plantProgress = this.defuseProgress = 0;
+    // someone mid-plant keeps planting: the seed can still go in after the round is decided
+    this.defuser = null;
+    this.defuseProgress = 0;
     const loser = otherTeam(winner);
-    this.over = this.score[winner] >= ROUND.toWin && this.score[winner] - this.score[loser] >= 2;
+    const R = this.rules;
+    this.over = this.score[winner] >= R.toWin && (!R.winByTwo || this.score[winner] - this.score[loser] >= 2);
     this.phase = 'end';
     this.timeLeft = ROUND.end;
     this.version++;
@@ -196,6 +224,7 @@ class StandardMode {
     switch (this.phase) {
       case 'prep':
         this.timeLeft -= dt;
+        this._carry();                       // you can grab your seed before GO
         if (this.timeLeft <= 0) {
           this.phase = 'live';
           this.timeLeft = ROUND.live;
@@ -229,6 +258,10 @@ class StandardMode {
 
       case 'end':
         this.timeLeft -= dt;
+        // the round is over (time ran out or a team won), but the seed can still be planted, just for fun
+        if (b.state === 'carried' || b.state === 'dropped') { this._carry(); this._planting(dt); }
+        if (b.state === 'planted' && this.funPlant) b.progress = Math.min(0.5, b.progress + dt * 0.1);
+        if (this.timeLeft <= 0 && this.planter) { this.timeLeft = 0; break; }   // let them finish planting first
         if (this.timeLeft <= 0) {
           if (this.over) this.phase = 'over';
           else this.startRound();
@@ -245,14 +278,43 @@ class StandardMode {
     }
   }
 
+  // A free spot on the floor just in front of the player, inside the spawn.
+  _seedSpot(me) {
+    const nav = this.game.nav, rect = this.game.mapInfo.spawns.attack;
+    const fx = -Math.sin(me.mover.yaw), fz = -Math.cos(me.mover.yaw);
+    for (const [d, side] of [[1.8, 0], [1.8, 1.2], [1.8, -1.2], [1.2, 0], [0, 1.2], [0, -1.2]]) {
+      const x = me.pos.x + fx * d - fz * side, z = me.pos.z + fz * d + fx * side;
+      const cx = Math.floor(x), cz = Math.floor(z);
+      if (cx < rect.x0 || cx > rect.x1 || cz < rect.z0 || cz > rect.z1 || !nav.walkable(cx, cz)) continue;
+      if (Math.abs(nav.floorAt(cx, cz) - me.pos.y) > 0.6) continue;
+      return new THREE.Vector3(x, nav.floorAt(cx, cz), z);
+    }
+    return me.pos.clone();
+  }
+
+  // Your bot teammates leave the seed for you. They only go get it if you didn't:
+  // you left the spawn without it, 10 s passed after GO, or you got popped.
+  _updateBotsMayTake() {
+    let may = true;
+    if (this.seedForMe && this.boo.state === 'dropped') {
+      const me = this.game.player, r = this.game.mapInfo.spawns.attack;
+      const inSpawn = me.pos.x >= r.x0 && me.pos.x <= r.x1 + 1 && me.pos.z >= r.z0 && me.pos.z <= r.z1 + 1;
+      may = this.phase === 'live' && (!me.alive || me.hadSeed || !inSpawn || ROUND.live - this.timeLeft > 10);
+    }
+    if (may !== this.botsMayTake) { this.botsMayTake = may; this.version++; }
+  }
+
   _carry() {
     const b = this.boo;
     if (b.state !== 'dropped') return;
+    this._updateBotsMayTake();
     for (const e of this.members(this.attackTeam)) {
+      if (!e.isPlayer && !this.botsMayTake) continue;
       if (!e.alive || flatDist(e.pos, b.pos) > BOOBOO.pickupRadius || Math.abs(e.pos.y - b.pos.y) > 1.5) continue;
       b.pickUp();
       b.carrier = e;
       e.carrying = true;
+      e.hadSeed = true;
       this.version++;
       if (e.isPlayer) { HUD.flashHint('You picked up the seed!'); Sound.pickup(); }
       break;
@@ -284,6 +346,12 @@ class StandardMode {
     c.carrying = false;
     this.planter = null;
     this.plantProgress = 0;
+    if (this.phase === 'end') {                   // after the round: the tree grows a bit, nothing else changes
+      this.funPlant = true;
+      Sound.planted();
+      if (c.isPlayer) HUD.flashHint('Seed planted, just for fun!');
+      return;
+    }
     this.plantedSite = site;
     this.phase = 'planted';
     this.timeLeft = BOOBOO.fuse;
@@ -382,7 +450,7 @@ class StandardMode {
         const around = { x0: Math.floor(b.pos.x - 8), z0: Math.floor(b.pos.z - 8), x1: Math.floor(b.pos.x + 8), z1: Math.floor(b.pos.z + 8) };
         return goalAt(this.game.findHoldSpot(around, watch) || near(b.pos.x, b.pos.z, 7), { hold: 5 + Math.random() * 5, lookAt: watch });
       }
-      if (b.state === 'dropped') {
+      if (b.state === 'dropped' && this.botsMayTake) {
         const bots = this.members(this.attackTeam).filter(e => e.alive && !e.isPlayer);
         const closest = bots.sort((p, q) => flatDist(p.pos, b.pos) - flatDist(q.pos, b.pos))[0];
         if (closest === bot) return { x: b.pos.x, z: b.pos.z, hold: 0 };
@@ -432,12 +500,15 @@ class StandardMode {
     if (this.phase === 'prep') return this.round === 1
       ? `Get ready! The round starts in ${Math.ceil(this.timeLeft)}`
       : `Shopping time! Press [B] to buy · starts in ${Math.ceil(this.timeLeft)}`;
-    if (!me.alive || this.phase === 'end') return '';
     const b = this.boo;
-    if (this.planter === me) return 'Planting… keep holding [E]';
+    if (me.alive && this.planter === me) return 'Planting… keep holding [E]';
+    if (me.alive && this.phase === 'end' && me.carrying && this.siteAt(me.pos)) return "Round's over, but you can still plant it! Hold [E]";
+    if (!me.alive || this.phase === 'end') return '';
     if (this.sideOf(me.team) === 'attack') {
       if (me.carrying) return this.siteAt(me.pos) ? 'Hold [E] to plant the seed here' : 'You have the seed! Bring it to A or B';
-      if (b.state === 'dropped') return 'The seed was dropped. Walk over it to pick it up!';
+      if (b.state === 'dropped') return this.seedForMe && !me.hadSeed
+        ? 'Your seed is on the ground. Walk over it to pick it up!'
+        : 'The seed was dropped. Walk over it to pick it up!';
       if (b.state === 'planted') return 'Keep the enemy away from the tree until it blooms!';
       return `Go with your team to site ${this.planSite}`;
     }
@@ -461,6 +532,7 @@ class StandardMode {
       planted: this.phase === 'planted',
       buying: this.phase === 'prep',
       round: this.round,
+      toWin: this.rules.toWin,
       alive: { blue: this.aliveCount('blue'), red: this.aliveCount('red') },
       total: { blue: this.members('blue').length, red: this.members('red').length },
     };

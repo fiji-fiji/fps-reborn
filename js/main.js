@@ -73,7 +73,7 @@
   const params = new URLSearchParams(location.search);
   const choose = (name, allowed, fallback) => (allowed.includes(params.get(name)) ? params.get(name) : fallback);
   const MAP_ID = choose('map', Object.keys(MAPS), 'oasis');
-  const MODE = choose('mode', ['standard', 'skirmish'], 'standard');
+  const MODE = choose('mode', ['standard', 'swiftplay', 'skirmish'], 'standard');
   const BOTS = choose('bots', Object.keys(BOT_LEVELS), 'easy');
 
   const mapDef = MAPS[MAP_ID];
@@ -253,6 +253,7 @@
     if (Input.justPressed('Digit5')) pickNade();
     if (Input.justPressed('KeyQ')) switchTo(me.slot === 'main' ? 'side' : 'main');
     if (Input.justPressed('KeyB')) shop.open();
+    if (Input.justPressed('KeyF') && !stuck) game.drops.trySwap(me);
     if (me.slot === 'seed' && !me.carrying) me.slot = me.guns.main ? 'main' : 'side';
     const gun = me.gun;
     const planting = mode.planter === me;
@@ -286,7 +287,9 @@
 
     for (const g of Object.values(me.guns)) if (g) g.tick(dt);
     game.footsteps(me, dt);
-    const down = Input.mouseDown, pressed = down && !triggerWasDown;
+    // a click counts even if the button was already let go before this frame (fast taps)
+    const pressed = Input.clicked || (Input.mouseDown && !triggerWasDown);
+    const down = Input.mouseDown || pressed;
     const rightPressed = Input.rightDown && !rightWasDown;
     triggerWasDown = down;
     rightWasDown = Input.rightDown;
@@ -352,8 +355,15 @@
     camera.updateMatrixWorld();
   }
 
-  // While you're out: watch a teammate from just behind them (click to switch).
-  let watchIdx = 0, wasDown = false;
+  // While you're out: see through a teammate's eyes, blaster and all (click to switch).
+  let watchIdx = 0, wasDown = false, watching = null, specYaw = 0, specPitch = 0;
+  function watch(t) {
+    if (watching === t) return;
+    if (watching && watching.alive) watching.model.setVisible(true);   // don't leave them invisible
+    watching = t;
+    if (t) { t.model.setVisible(false); specYaw = t.mover.yaw; specPitch = t.mover.pitch; }   // you're inside their head
+  }
+  game.onShot = shooter => { if (shooter === watching && !me.alive) viewmodel.onFire(); };
   function spectate(dt) {
     view.scoped = false;
     hideArc();
@@ -362,6 +372,8 @@
     const click = Input.mouseDown && !wasDown;
     if (click) watchIdx++;
     if (!mates.length) {
+      watch(null);
+      viewmodel.setVisible(false);
       HUD.setSpectating(null);
       camera.position.y += Math.max(0, 1.2 - (camera.position.y - me.pos.y - 1.6)) * dt;
       me.mover.look(Input.mouseDX, Input.mouseDY, sensitivity);
@@ -370,17 +382,20 @@
       return;
     }
     const t = mates[watchIdx % mates.length];
+    watch(t);
     HUD.setSpectating(t.name);
-    const yaw = t.mover.yaw, pitch = Math.max(-0.5, Math.min(0.4, t.mover.pitch));
-    t.mover.eyePosition(tmp);
-    const back = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    let dist = 2.6;
-    const hit = world.raycast(tmp, back, 2.6);   // don't put the camera inside a wall
-    if (hit) dist = Math.max(0.3, hit.t - 0.2);
-    camera.position.copy(tmp).addScaledVector(back, dist);
-    camera.position.y += 0.5;
-    camera.rotation.set(pitch - 0.12, yaw, 0);
+    // follow their aim, smoothed a little so it isn't jerky
+    const dy = Math.atan2(Math.sin(t.mover.yaw - specYaw), Math.cos(t.mover.yaw - specYaw));
+    specYaw += dy * Math.min(1, dt * 14);
+    specPitch += (t.mover.pitch - specPitch) * Math.min(1, dt * 14);
+    t.mover.eyePosition(camera.position);
+    camera.rotation.set(specPitch, specYaw, 0);
     camera.updateMatrixWorld();
+    // their blaster in front of you (refills and all)
+    viewmodel.holdNade(null);
+    viewmodel.holdSeed(false);
+    viewmodel.setGun(t.gun);
+    viewmodel.update(dt, t.mover, false);
   }
 
   // --- menu / pointer lock ---
@@ -389,7 +404,7 @@
   const playBtn = document.getElementById('playBtn');
   const menuSub = document.getElementById('menuSub');
   const modeName = game.mode.kind === 'practice' ? mapDef.name
-    : `${mapDef.name} · ${MODE === 'skirmish' ? 'Skirmish' : 'Standard'} · ${BOTS} bots`;
+    : `${mapDef.name} · ${MODE === 'skirmish' ? 'Skirmish' : game.mode.rules.name} · ${BOTS} bots`;
   menuSub.textContent = modeName;
   const current = { map: MAP_ID, mode: MODE, bots: BOTS };
   document.querySelectorAll('.pick').forEach(row => {
@@ -438,7 +453,7 @@
 
     if (Input.locked || shop.isOpen) {
       if (HUD._openShopNext && Input.locked) { HUD._openShopNext = false; shop.open(); }
-      if (me.alive) { controlPlayer(dt); HUD.setSpectating(null); } else { spectate(dt); viewmodel.setVisible(false); }
+      if (me.alive) { watch(null); controlPlayer(dt); HUD.setSpectating(null); } else spectate(dt);
       wasDown = Input.mouseDown;
       game.update(dt);
       effects.update(dt, world);
@@ -447,7 +462,7 @@
       HUD.update(dt, me, game.mode, view);
       HUD.scoreboard(Input.held('Tab'), game, me);
       HUD.setSpread(me.gun.computeSpread(me.mover, view.scoped), camera);
-      HUD.updateMarkers(camera, me, plantLook > 0.05 ? [] : game.mode.markersFor(me));
+      HUD.updateMarkers(camera, me, plantLook > 0.05 ? [] : game.mode.markersFor(me).concat(game.drops.markersFor(me)));
       if (game.mode.phase === 'over' && Input.justPressed('Enter')) location.reload();
       if (Input.justPressed('KeyM')) HUD.flashHint(Music.toggle() ? 'Music on ♪' : 'Music off');
     }

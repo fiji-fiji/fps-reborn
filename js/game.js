@@ -90,7 +90,7 @@ class PlayerAgent {
 }
 
 class Game {
-  // modeName: 'standard' | 'skirmish' (maps without team spawns use practice)
+  // modeName: 'standard' | 'swiftplay' | 'skirmish' (maps without team spawns use practice)
   constructor({ scene, world, mapInfo, effects, camera, difficulty = 'easy', modeName = 'standard' }) {
     Object.assign(this, { scene, world, mapInfo, effects, camera });
     this.time = 0;
@@ -99,6 +99,7 @@ class Game {
     this._v = new THREE.Vector3();
     this.arrows = new Arrows(this);
     this.throwables = new Throwables(this);
+    this.drops = new Drops(this);
 
     this.player = new PlayerAgent(this);
     this.entities.push(this.player);
@@ -118,7 +119,8 @@ class Game {
           this.entities.push(bot);
         });
       }
-      this.mode = modeName === 'skirmish' ? new SkirmishMode(this) : new StandardMode(this);
+      this.mode = modeName === 'skirmish' ? new SkirmishMode(this)
+        : new StandardMode(this, modeName === 'swiftplay' ? SWIFTPLAY : {});
     } else {
       this.mode = new PracticeMode(this);
     }
@@ -273,6 +275,7 @@ class Game {
   // One bubble shot (one pellet). Bubbles pass through teammates.
   fireShot(shooter, eye, dir, gun, muzzle = null) {
     const def = gun.def;
+    if (this.onShot) this.onShot(shooter);
     const wallHit = this.world.raycast(eye, dir, def.range);
     let best = wallHit ? wallHit.t : def.range;
     let target = null, part = null;
@@ -325,6 +328,7 @@ class Game {
     if (push.lengthSq() > 1e-6) push.normalize();
     this.effects.pixelBurst(victim.burst(), center, push, PIXEL * 0.95);
     Sound.shatter(this._volumeAt(center));
+    if (this.mode.kind !== 'practice') this.drops.drop(victim);   // their blaster falls to the ground
     this.mode.onOut(victim, attacker, part, weapon);
     for (const b of this.bots) if (b.alive && b.onPopped) b.onPopped(victim, attacker);
   }
@@ -382,6 +386,7 @@ class Game {
     for (const dm of this.dummies) dm.update(dt, this.camera);
     this.arrows.update(dt);
     this.throwables.update(dt);
+    this.drops.update(dt);
     for (const b of this.bots) if (b.alive) this.footsteps(b, dt);
     this._separate();
     this.mode.update(dt);

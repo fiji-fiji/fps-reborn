@@ -210,6 +210,34 @@ class Gun {
 
 // ---------------------------------------------------------------------------
 // Viewmodel: what you hold. One model per weapon (built the first time it's needed).
+// The round bubble jar on top of each blaster: a glass ball (radius r, bottom at y) a bit
+// longer front-to-back. The soapy liquid inside is a ball cut off flat at the fill level.
+const JAR = { r: 0.06, y: 0.04, stretch: 1.25 };
+const _jarGeoCache = new Map();
+function jarLiquidGeometry(frac) {
+  const q = Math.round(Math.max(0, Math.min(1, frac)) * 24) / 24;
+  if (_jarGeoCache.has(q)) return _jarGeoCache.get(q);
+  const r = JAR.r - 0.005, cy = JAR.r, bottom = cy - r;
+  const topY = bottom + Math.max(0.002, q * 2 * r);
+  const pts = [new THREE.Vector2(0, bottom)];
+  const n = 14;
+  for (let i = 1; i <= n; i++) {
+    const y = bottom + (topY - bottom) * (i / n);
+    pts.push(new THREE.Vector2(Math.sqrt(Math.max(0, r * r - (y - cy) * (y - cy))), y));
+  }
+  pts.push(new THREE.Vector2(0, topY));                 // flat surface on top
+  const geo = new THREE.LatheGeometry(pts, 24);
+  _jarGeoCache.set(q, geo);
+  return geo;
+}
+function setJarLevel(vm, frac) {
+  const q = Math.round(Math.max(0, Math.min(1, frac)) * 24) / 24;
+  if (q === vm.liquidLevel) return;
+  vm.liquidLevel = q;
+  vm.liquid.visible = q > 0;
+  if (q > 0) vm.liquid.geometry = jarLiquidGeometry(q);
+}
+
 class Viewmodel {
   constructor(viewCamera) {
     this.camera = viewCamera;
@@ -236,10 +264,46 @@ class Viewmodel {
       this.camera.add(this.models[key].group);
     }
     for (const m of Object.values(this.models)) m.group.visible = false;
+    if (this.sassy) this.sassy.hide();
     this.vm = this.models[key];
     this.vm.group.visible = true;
     this.gun = gun;
     this.swapT = 0.35;
+  }
+
+  // How full the jar is, in %, on a little tag stuck to the front of the jar.
+  // red under 25 · orange under 50 · green under 80 · purple 80 and up
+  _jarLabel(vm, frac) {
+    if (!vm.pctTag) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 64;
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.encoding = THREE.sRGBEncoding;
+      tex.anisotropy = 4;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.05),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+      mesh.position.set(0, JAR.y + JAR.r * 0.9, 0.03 + JAR.r * JAR.stretch + 0.004);
+      mesh.renderOrder = 2;                              // after the glass
+      vm.group.add(mesh);
+      vm.pctTag = { canvas, tex, text: '' };
+    }
+    const pct = Math.round(Math.max(0, Math.min(1, frac)) * 100);
+    const color = pct < 25 ? '#ff5a5a' : pct < 50 ? '#ffa53d' : pct < 80 ? '#5ee08a' : '#c77dff';
+    const text = `${pct}%`;
+    if (text === vm.pctTag.text) return;
+    vm.pctTag.text = text;
+    const c = vm.pctTag.canvas, g = c.getContext('2d');
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = 'rgba(20, 24, 36, 0.72)';
+    g.beginPath();
+    if (g.roundRect) g.roundRect(4, 6, 120, 52, 26); else g.rect(4, 6, 120, 52);
+    g.fill();
+    g.font = 'bold 38px system-ui, -apple-system, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = color;
+    g.fillText(text, 64, 34);
+    vm.pctTag.tex.needsUpdate = true;
   }
 
   _box(parent, w, h, d, m, x, y, z) {
@@ -282,13 +346,27 @@ class Viewmodel {
     }
     vm.muzzleZ = vm.head.position.z - 0.04;
 
-    // bubble jar: glass box + soapy liquid that drains as you shoot
+    // bubble jar: a round glass bulb with a cork + soapy liquid that drains as you shoot
     const glass = new THREE.MeshLambertMaterial({ color: 0xe0f7ff, transparent: true, opacity: 0.35, depthWrite: false });
-    add(g, 0.09, 0.1, 0.15, glass, 0, 0.09, 0.03);
-    const liquidGeo = new THREE.BoxGeometry(0.075, 0.085, 0.135);
-    liquidGeo.translate(0, 0.0425, 0); // scale from the bottom
-    vm.liquid = new THREE.Mesh(liquidGeo, new THREE.MeshLambertMaterial({ color: 0x7fdcff, emissive: 0x1d4f66 }));
-    vm.liquid.position.set(0, 0.0475, 0.03);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(JAR.r, 24, 16), glass);
+    bulb.position.set(0, JAR.y + JAR.r, 0.03);
+    bulb.scale.z = JAR.stretch;
+    bulb.renderOrder = 1;                              // glass drawn after the liquid inside it
+    g.add(bulb);
+    const top = JAR.y + JAR.r * 2;
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.02, 16), glass);
+    neck.position.set(0, top - 0.002, 0.03);
+    neck.renderOrder = 1;
+    g.add(neck);
+    const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.027, 0.022, 0.02, 16), new THREE.MeshLambertMaterial({ color: 0xffb3cf, emissive: 0x2a0a14 }));
+    cork.position.set(0, top + 0.014, 0.03);
+    g.add(cork);
+    vm.cork = cork;                                    // the "cork" refill pops it off and puts it back
+    vm.corkHome = cork.position.clone();
+    vm.liquid = new THREE.Mesh(jarLiquidGeometry(1), new THREE.MeshLambertMaterial({ color: 0x7fdcff, emissive: 0x1d4f66 }));
+    vm.liquid.position.set(0, JAR.y, 0.03);
+    vm.liquid.scale.z = JAR.stretch;
+    vm.liquidLevel = 1;
     g.add(vm.liquid);
 
     // little bubble puff when shooting
@@ -361,7 +439,7 @@ class Viewmodel {
     vm.handPour = new THREE.Vector3(-0.088, 0.27, 0.03);
     vm.handAway = new THREE.Vector3(-0.55, -0.35, 0.3);
     vm.pourTilt = -1.7;
-    vm.jarTopY = 0.14;
+    vm.jarTopY = JAR.y + JAR.r * 2 + 0.024;   // top of the cork
   }
 
   // Frosting knife: pink handle, silver blade, a dollop of pink frosting with sprinkles.
@@ -524,13 +602,11 @@ class Viewmodel {
     const t = reloading ? 1 - gun.reloading / gun.def.reloadTime : 0;
     // every refill picks a random little show (the classic pour, or one of the sassy ones)
     if (reloading && !this._wasReloading) {
-      const styles = ['pour', ...SASSY_STYLES].filter(st => st !== this.reloadStyle);
-      this.reloadStyle = styles[Math.floor(Math.random() * styles.length)];
+      this.reloadStyle = pickRefillStyle(this.reloadStyle);
     }
     this._wasReloading = reloading;
     const sassy = reloading && this.reloadStyle !== 'pour';
     if (!this.sassy) this.sassy = new SassyHand(this.camera);
-    if (sassy) this.sassy.play(this.reloadStyle, t, dt); else this.sassy.hide();
     const ph = Viewmodel.reloadPhases(reloading && !sassy ? t : 0);
 
     // jar level = ammo; it rises while the bottle pours (or when the sassy hand says so)
@@ -539,12 +615,19 @@ class Viewmodel {
       const target = gun.ammo + Math.min(gun.def.magSize - gun.ammo, gun.reserve);
       level += (target - gun.ammo) * (sassy ? this.sassy.fill(this.reloadStyle, t) : ph.fill);
     }
-    vm.liquid.scale.y = Math.max(0.001, level / gun.def.magSize);
+    this.jarFrac = level / gun.def.magSize;
+    setJarLevel(vm, this.jarFrac);
+    this._jarLabel(vm, this.jarFrac);
 
     // refilling: the blaster dips and tilts a little towards the hand to present the jar
     const lean = reloading ? (sassy ? 0.35 * Math.sin(t * Math.PI) : ph.reach) : 0;
     g.position.set(vm.restPos.x + bx - lean * 0.02, vm.restPos.y + by - lean * 0.04, vm.restPos.z + this.kick * 0.05);
     g.rotation.set(this.kick * 0.06 + lean * 0.12, 0, lean * 0.22);
+    if (sassy) {
+      g.rotation.z += this.sassy.wobble;                // she bumped the jar
+      g.rotation.x += this.sassy.wobble * 0.4;
+      this.sassy.play(this.reloadStyle, t, dt, vm);
+    } else this.sassy.hide();
 
     vm.hand.visible = reloading && ph.reach > 0.001;
     vm.stream.visible = false;

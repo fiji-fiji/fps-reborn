@@ -271,7 +271,13 @@ kbd {
 .card .bars span i { position: absolute; inset: 0; background: var(--mint); }
 .card.cant { opacity: .4; cursor: not-allowed; }
 .card.owned { border-color: var(--gold); }
-.card.owned .price::after { content: '  ✓ yours'; color: var(--mint); font-size: .8rem; }
+.card.owned .price::after { content: ' ✓'; color: var(--mint); }
+.card .icon { height: 3rem; display: flex; align-items: center; justify-content: center; }
+.card .icon .wicon.big { filter: drop-shadow(0 .12rem 0 rgba(0,0,0,.6)); }
+.card .pips { font-size: .7rem; color: var(--mint); letter-spacing: .15em; }
+#shop .card { align-items: center; text-align: center; }
+#shop .shopGrid { grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); }
+#shopNext { font-size: .95rem; color: var(--mint); }
 .shopSection { font-size: .85rem; color: #aaa; letter-spacing: .08em; margin: .9rem 0 .4rem; }
 .shopFoot { margin-top: .9rem; font-size: .95rem; color: #ddd; text-align: center; }
 

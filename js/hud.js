@@ -162,7 +162,7 @@ const HUD = {
       e.timer.textContent = (data.planted ? '✿ ' : data.buying ? '🛒 ' : '') + fmtTime(Math.ceil(data.timer));
       e.timer.className = data.planted ? 'planted' : data.timer <= 10 && !data.buying ? 'low' : '';
     }
-    e.roundNo.textContent = data.round ? `ROUND ${data.round} · FIRST TO 13` : '';
+    e.roundNo.textContent = data.round ? `ROUND ${data.round} · FIRST TO ${data.toWin || 13}` : '';
     const pips = (alive, total, team) => {
       let s = '';
       for (let i = 0; i < total; i++) s += `<i class="${i < alive ? team : 'gone'}"></i>`;
@@ -234,7 +234,8 @@ const HUD = {
 
     // hint + plant/uproot progress
     this.flashHintLeft = Math.max(0, this.flashHintLeft - dt);
-    let hint = this.flashHintLeft > 0 ? this.flashText : mode.hintFor(me);
+    const dropHint = mode.game && mode.game.drops ? mode.game.drops.hintFor(me) : '';
+    let hint = this.flashHintLeft > 0 ? this.flashText : (dropHint || mode.hintFor(me));
     const gun = me.gun;
     if (!hint && me.alive && gun.ammo === 0 && gun.reserve > 0 && !gun.busy) hint = 'Out of bubbles! Press [R] to refill';
     if (hint !== this._lastHint) { this.el.hint.innerHTML = keysToHtml(hint); this._lastHint = hint; }

@@ -82,7 +82,7 @@
     <div class="shopPanel box">
       <div class="shopHead">
         <h2>🛒 Shop</h2>
-        <div><div id="shopMoney"></div><div id="shopTimer"></div></div>
+        <div><div id="shopMoney"></div><div id="shopNext"></div><div id="shopTimer"></div></div>
       </div>
       <div class="shopSection">BLASTERS (you also always have the free Dandelion)</div>
       <div class="shopGrid" id="shopGrid"></div>
@@ -108,7 +108,7 @@
           <li><b>Attacking:</b> carry the seed to site <b>A</b> or <b>B</b> and hold <kbd>E</kbd> to plant it.</li>
           <li><b>Defending:</b> stop them, or hold <kbd>E</kbd> next to their tree to uproot it.</li>
           <li>Win rounds to earn coins, then press <kbd>B</kbd> at the start of a round to shop.</li>
-          <li>First team to <b>13 rounds</b> wins. Follow the floating labels if you're lost!</li>
+          <li>First team to <b>13 rounds</b> wins (<b>5</b> in Swiftplay). Follow the floating labels if you're lost!</li>
         </ul>
       </div>
 
@@ -121,6 +121,7 @@
       <div class="pickLabel">MODE</div>
       <div class="pick" data-param="mode">
         <button data-value="standard">Standard (rounds)</button>
+        <button data-value="swiftplay">Swiftplay (first to 5)</button>
         <button data-value="skirmish">Skirmish (respawns)</button>
       </div>
       <div class="pickLabel">BOTS</div>
@@ -153,6 +154,7 @@
         <div><kbd>3</kbd> knife · <kbd>4</kbd> the seed</div>
         <div><kbd>5</kbd> grenades (press again to switch)</div>
         <div><kbd>Q</kbd> swap main / sidearm</div>
+        <div><kbd>F</kbd> swap for a blaster on the ground</div>
         <div><kbd>M</kbd> music on / off</div>
         <div><kbd>Tab</kbd> scoreboard</div>
         <div><kbd>Esc</kbd> pause</div>
@@ -176,6 +178,7 @@
   <script src="js/bot.js"></script>
   <script src="js/booboo.js"></script>
   <script src="js/projectiles.js"></script>
+  <script src="js/drops.js"></script>
   <script src="js/grenades.js"></script>
   <script src="js/sassy.js"></script>
   <script src="js/plantanim.js"></script>

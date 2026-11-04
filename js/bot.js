@@ -345,7 +345,8 @@ class Bot {
     const mode = this.game.mode;
     this.goalVersion = mode.version;
     for (let tries = 0; tries < 4; tries++) {
-      const goal = mode.botGoal(this);
+      // no main blaster and one lying close by? go get it first
+      const goal = (tries === 0 && this.game.drops.goalFor(this)) || mode.botGoal(this);
       if (!goal) { this.waitTimer = 0.5; return; }
       this.goal = goal;
       if (this._pathTo(goal.x, goal.z)) return;

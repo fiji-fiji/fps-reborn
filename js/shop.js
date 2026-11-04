@@ -13,6 +13,7 @@ class ShopUI {
     this.shields = document.getElementById('shopShields');
     this.moneyEl = document.getElementById('shopMoney');
     this.timerEl = document.getElementById('shopTimer');
+    this.nextEl = document.getElementById('shopNext');
     document.getElementById('shopDone').addEventListener('click', () => this.close(false));
     // keys while the shop is open (the game's own key handling is paused then)
     window.addEventListener('keydown', e => {
@@ -43,23 +44,17 @@ class ShopUI {
     this.hooks.onClose(auto);
   }
 
-  _card(item, def, owned) {
+  // a card is just the item's picture and its price (the name shows when you hover it)
+  _card(item, def, owned, extra = '') {
     const g = this.game, me = this.me;
     const price = g.priceOf(item);
     const can = g.canAfford(me, item) || owned;
     const b = document.createElement('button');
     b.className = 'card' + (can ? '' : ' cant') + (owned ? ' owned' : '');
-    const color = def.look ? `#${def.look.petal.toString(16).padStart(6, '0')}` : def.bow ? '#ff5d8f' : '#9fe3ff';
-    const bars = def.bars ? `
-      <div class="bars">
-        Power <span><i style="right:${100 - def.bars.power * 100}%"></i></span>
-        Speed <span><i style="right:${100 - def.bars.speed * 100}%"></i></span>
-        Range <span><i style="right:${100 - def.bars.range * 100}%"></i></span>
-      </div>` : '';
+    b.title = def.name;
     b.innerHTML = `
-      <div class="swatch" style="background:${color}"></div>
-      <div class="top"><span class="name">${def.name}</span><span class="price">${price ? fmtMoney(price) : 'FREE'}</span></div>
-      <div class="desc">${def.desc}</div>${bars}`;
+      <div class="icon">${WeaponIcons.big(item, 0.3)}</div>
+      <div class="price">${price ? fmtMoney(price) : 'FREE'}</div>${extra}`;
     b.addEventListener('click', () => {
       if (g.buy(me, item)) Sound.buy();
       else if (owned && WEAPONS[item]) me.slot = WEAPONS[item].slot;
@@ -85,8 +80,8 @@ class ShopUI {
     util.innerHTML = '';
     for (const k of NADE_ORDER) {
       const d = GRENADES[k];
-      const shown = Object.assign({}, d, { name: `${d.icon} ${d.name}`, desc: `${d.desc} You have ${me.nades[k]} of ${d.max}.` });
-      util.appendChild(this._card(k, shown, me.nades[k] >= d.max));
+      const pips = `<div class="pips">${'●'.repeat(me.nades[k])}${'○'.repeat(d.max - me.nades[k])}</div>`;
+      util.appendChild(this._card(k, d, me.nades[k] >= d.max, pips));
     }
     this._refreshTop();
   }
@@ -94,6 +89,8 @@ class ShopUI {
   _refreshTop() {
     const mode = this.game.mode;
     this.moneyEl.textContent = mode.freeShop ? 'Everything is free here!' : `🪙 ${fmtMoney(this.me.money)}`;
+    const next = !mode.freeShop && mode.minNextMoney ? mode.minNextMoney(this.me) : null;
+    this.nextEl.textContent = next == null ? '' : `next round, at least 🪙 ${fmtMoney(next)}`;
     this.timerEl.textContent = mode.phase === 'prep' ? `Round starts in ${Math.ceil(mode.timeLeft)}s` : '';
   }
 
