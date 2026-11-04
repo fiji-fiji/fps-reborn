@@ -14,15 +14,18 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   Textures.atlas.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
-  const HORIZON = 0xd7eeff;
+  // the look (menu: LOOK): classic textured blocks, or clean flat pastel colours (look.js)
+  const CLEAN = Look.pick() === 'clean';
+  const HORIZON = CLEAN ? 0xf4f8ff : 0xd7eeff;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(HORIZON);
-  scene.fog = new THREE.Fog(HORIZON, 70, 190);
+  scene.fog = CLEAN ? new THREE.Fog(HORIZON, 45, 175) : new THREE.Fog(HORIZON, 70, 190);   // clean: bright white haze
   // soft light from the sky above + warm bounce from the sand below
-  scene.add(new THREE.HemisphereLight(0xe3f2ff, 0xd8c29a, 0.62));
-  const sun = new THREE.DirectionalLight(0xfff0d6, 0.62);   // warm sunlight that casts shadows
+  scene.add(CLEAN ? new THREE.HemisphereLight(0xf2f6ff, 0x9a9aac, 1.0) : new THREE.HemisphereLight(0xe3f2ff, 0xd8c29a, 0.62));
+  const sun = new THREE.DirectionalLight(0xfff0d6, CLEAN ? 0.38 : 0.62);   // warm sunlight that casts shadows
   scene.add(sun, sun.target);
-  sun.castShadow = true;
+  sun.castShadow = !CLEAN;                                  // clean: no hard shadows
+  renderer.shadowMap.enabled = !CLEAN;
   sun.shadow.mapSize.set(4096, 4096);
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
@@ -31,7 +34,7 @@
   // sky: a big gradient dome + a few puffy clouds drifting slowly
   const skyGeo = new THREE.SphereGeometry(500, 32, 16);
   const skyCols = [];
-  const topC = new THREE.Color(0x5aa9f2), midC = new THREE.Color(HORIZON);
+  const topC = new THREE.Color(CLEAN ? 0xc4dcf5 : 0x5aa9f2), midC = new THREE.Color(HORIZON);
   for (let i = 0; i < skyGeo.attributes.position.count; i++) {
     const y = skyGeo.attributes.position.getY(i) / 500;
     const c = midC.clone().lerp(topC, Math.pow(Math.max(0, y), 0.6));
@@ -55,7 +58,7 @@
     c.position.set(48 + Math.cos(a) * r, 55 + crng() * 25, 48 + Math.sin(a) * r);
     clouds.add(c);
   }
-  scene.add(clouds);
+  if (!CLEAN) scene.add(clouds);                         // clean: an empty pale sky
 
   const FOV = 70;
   const camera = new THREE.PerspectiveCamera(FOV, 1, 0.05, 300);
@@ -79,15 +82,21 @@
 
   // --- menu: picking map / mode / bots restarts with the new settings ---
   const NET = Net.detect();
-  const current = { map: MAP_ID, mode: MODE, bots: BOTS };
+  const current = { map: MAP_ID, mode: MODE, bots: BOTS, look: Look.name };
   document.querySelectorAll('.pick').forEach(row => {
     const param = row.dataset.param;
-    if (param !== 'map' && MAP_ID === 'garden') row.classList.add('disabled');
+    if (param !== 'map' && param !== 'look' && MAP_ID === 'garden') row.classList.add('disabled');
     row.querySelectorAll('button').forEach(b => {
       b.classList.toggle('active', b.dataset.value === current[param]);
       b.addEventListener('click', () => {
         if (b.dataset.value === current[param]) return;
-        const next = new URLSearchParams(current);
+        if (param === 'look') {                        // just for you: remembered, then reload
+          Look.save(b.dataset.value);
+          const q = new URLSearchParams(location.search); q.delete('look');
+          location.search = q.toString();
+          return;
+        }
+        const next = new URLSearchParams({ map: MAP_ID, mode: MODE, bots: BOTS });
         next.set(param, b.dataset.value);
         if (NET === 'host') next.set('lan', 'host');
         location.search = next.toString();             // restarts with the new settings
@@ -528,6 +537,7 @@
 
   // --- game loop ---
   let last = performance.now();
+  let lookIn = 0;
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
@@ -552,6 +562,7 @@
     }
     HUD.drawMinimap(me, game.entities, game.time, game.mode.booMarker(me.team));
     Input.endFrame();
+    if (CLEAN && (lookIn -= dt) <= 0) { lookIn = 0.5; Look.flatten(scene); Look.flatten(viewScene); }   // things made since
     sky.position.copy(camera.position);
     clouds.position.x = Math.sin(now / 60000) * 30;
     clouds.position.z = (now / 400) % 80 - 40;

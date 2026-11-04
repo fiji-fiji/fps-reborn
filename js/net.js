@@ -276,7 +276,7 @@ const Net = {
   guestLobby() {
     const box = this.box();
     box.style.display = 'block';
-    document.querySelectorAll('.pick, .pickLabel').forEach(el => { el.style.display = 'none'; });   // the host picks
+    document.querySelectorAll('.pick, .pickLabel').forEach(el => { if (!el.closest('.lookRow')) el.style.display = 'none'; });   // the host picks (LOOK is yours)
     document.getElementById('playBtn').disabled = true;
     let name = lsGet('fps.lanName');
     box.innerHTML = `
@@ -508,7 +508,7 @@ class NetGuest {
       case 'shot': {
         if (ev.s === Net.id) break;                   // your own: already drawn
         const a = V(ev.a), b = V(ev.b);
-        fx.bubbleTrail(a, b);
+        fx.shotTrail(a, b);
         if (ev.n) { fx.bubbleBurst(b, V(ev.n), 3, 1.2); fx.foamSpot(b, V(ev.n)); }
         Sound.at(a, 'shoot', g._volumeAt(a), ev.k);
         break;

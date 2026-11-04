@@ -153,6 +153,8 @@ const Sound = (() => {
     snap() { if (!on()) return; noise(0.04, 3500, 0.5, 'highpass'); tone(2400, 0.03, 0.15, 'square', 1800); },
     file() { if (!on()) return; noise(0.07, 3000, 0.12, 'bandpass'); },
     brush() { if (!on()) return; noise(0.05, 5000, 0.06, 'highpass'); },
+    // a paw on the glass: a little glassy clink
+    clink(v = 1) { if (!on()) return; tone(1760, 0.09, 0.16 * v, 'triangle', 1700); tone(2637, 0.16, 0.08 * v, 'sine', 2637, 0.01); },
     tap() { if (!on()) return; tone(420 + Math.random() * 120, 0.04, 0.14, 'triangle', 300); },
     heart() { if (!on()) return; tone(1568, 0.12, 0.13, 'triangle'); tone(2093, 0.2, 0.13, 'triangle', 2093, 0.08); },
     // sunglasses flip: a bright "ting"

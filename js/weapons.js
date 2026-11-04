@@ -214,10 +214,11 @@ class Gun {
 // ---------------------------------------------------------------------------
 // Viewmodel: what you hold. One model per weapon (built the first time it's needed).
 // The bubble reservoir on top of each blaster: a piece of lab glassware, different for
-// every blaster, with coloured soap inside that drains as you shoot.
+// every blaster, with blue water inside that drains as you shoot.
 //   pts    = the outside of the glass, [radius, height] from the bottom up (it's turned on a lathe)
 //   fill   = how high the liquid goes when full; mid/bodyR = the middle of the glass (refill shows aim there)
 //   stopper: 'cork' (a cork in the neck) or 'lid' (a little glass lid on a beaker); marks = measuring lines
+const WATER = { color: 0x7fdcff, glow: 0x1d4f66 };   // the blue water in every glass
 const JAR = { y: 0.04, z: 0.03 };      // where the glass stands on the stem
 function _ballBottom(r, n = 8, cy = r) {             // a round bottom: a half ball of radius r
   const out = [];
@@ -227,21 +228,21 @@ function _ballBottom(r, n = 8, cy = r) {             // a round bottom: a half b
 const VESSELS = {
   // test tube, held in a little clamp
   dandelion: { pts: [..._ballBottom(0.022), [0.022, 0.12], [0.026, 0.125]], fill: 0.1, mid: 0.06, bodyR: 0.024,
-    stopper: 'cork', neckR: 0.022, color: 0xa8ff60, clamp: true },
+    stopper: 'cork', neckR: 0.022, clamp: true },
   // Erlenmeyer flask: a wide flat bottom, a cone up to a narrow neck
   tulip: { pts: [[0, 0], [0.058, 0], [0.062, 0.008], [0.044, 0.05], [0.026, 0.085], [0.018, 0.1], [0.018, 0.13], [0.022, 0.134]],
-    fill: 0.07, mid: 0.035, bodyR: 0.05, stopper: 'cork', neckR: 0.018, color: 0xff7ab8 },
+    fill: 0.07, mid: 0.035, bodyR: 0.05, stopper: 'cork', neckR: 0.018 },
   // round-bottom flask: a big glass ball and a long neck
   sunflower: { pts: (() => { const r = 0.066, out = [];
       for (let i = 0; i <= 14; i++) { const a = -Math.PI / 2 + (i / 14) * (Math.PI * 0.87); out.push([Math.cos(a) * r, r + Math.sin(a) * r]); }
       out.push([0.019, 0.15], [0.019, 0.178], [0.023, 0.182]); return out; })(),
-    fill: 0.1, mid: 0.066, bodyR: 0.066, stopper: 'cork', neckR: 0.019, color: 0xffb340 },
+    fill: 0.1, mid: 0.066, bodyR: 0.066, stopper: 'cork', neckR: 0.019 },
   // beaker with a pouring spout, measuring lines, a glass lid
   bloom: { pts: [[0, 0], [0.054, 0], [0.058, 0.006], [0.058, 0.108], [0.062, 0.112]], fill: 0.095, mid: 0.055, bodyR: 0.058,
-    stopper: 'lid', neckR: 0.062, color: 0xc77dff, marks: [0.03, 0.05, 0.07, 0.09], spout: true },
+    stopper: 'lid', neckR: 0.062, marks: [0.03, 0.05, 0.07, 0.09], spout: true },
   // tall graduated cylinder on a wide foot, measuring lines
   lily: { pts: [[0, 0.012], [0.03, 0.012], [0.03, 0.2], [0.035, 0.205]], fill: 0.185, mid: 0.1, bodyR: 0.03,
-    stopper: 'cork', neckR: 0.03, color: 0x7fdcff, marks: [0.05, 0.08, 0.11, 0.14, 0.17], foot: true },
+    stopper: 'cork', neckR: 0.03, marks: [0.05, 0.08, 0.11, 0.14, 0.17], foot: true },
 };
 VESSELS.default = VESSELS.sunflower;
 
@@ -527,8 +528,7 @@ class Viewmodel {
     g.add(cork);
     vm.cork = cork;                                    // the "cork" refill pops it off and puts it back
     vm.corkHome = cork.position.clone();
-    const liquidColor = new THREE.Color(v.color);
-    vm.liquid = new THREE.Mesh(vesselLiquidGeometry(v, 1), new THREE.MeshLambertMaterial({ color: liquidColor, emissive: liquidColor.clone().multiplyScalar(0.25) }));
+    vm.liquid = new THREE.Mesh(vesselLiquidGeometry(v, 1), new THREE.MeshLambertMaterial({ color: WATER.color, emissive: WATER.glow }));
     jar.add(vm.liquid);
     vm.liquidLevel = 1;
     vm.jarCenter = new THREE.Vector3(0, JAR.y + v.mid, JAR.z);   // the refill shows aim at these
@@ -553,18 +553,15 @@ class Viewmodel {
   // Left hand (painted nails, sleeve, bracelet) holding a soap bottle, used for refilling.
   _buildHand(vm) {
     const lam = (hex, o = {}) => new THREE.MeshLambertMaterial({ color: hex, ...o });
-    // a big fluffy paw (white fur, pink beans + painted claws, gold bracelet) in a team sleeve
+    // a big paw (white fur, pink beans + painted claws, gold bracelet) in a team sleeve
     const furTex = Textures.noisyTexture(0xffffff, 14, 8, 41);
     const skin = new THREE.MeshLambertMaterial({ map: furTex, color: BICHON.fur, emissive: DOG_GLOW });
-    const fluff = new THREE.MeshLambertMaterial({ map: furTex, color: BICHON.fur, emissive: DOG_GLOW, flatShading: true });
     const nail = lam(0xff3d8b, { emissive: 0x551030 }), bean = lam(PAW.bean, { emissive: 0x3a1020 });
     const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 20, 8, 43), color: PAW.sleeve });
     const gold = lam(0xffd36b, { emissive: 0x403010 });
     const bottleMat = lam(0xfff1a6, { emissive: 0x2a2410 });
     const cap = lam(0xffffff);
     const add = (...a) => this._box(...a);
-    if (!PUFF_GEO) PUFF_GEO = new THREE.IcosahedronGeometry(1, 1);
-    const puff = (parent, r, x, y, z) => { const m = new THREE.Mesh(PUFF_GEO, fluff); m.scale.setScalar(r); m.position.set(x, y, z); parent.add(m); return m; };
 
     // hand = the wrist point. The forearm hangs off it and stays put;
     // the grip (paw + bottle) turns around the wrist to pour.
@@ -580,9 +577,6 @@ class Viewmodel {
     add(held, 0.022, 0.02, 0.022, cap, 0, 0.052, 0);
     vm.spout = add(held, 0.012, 0.016, 0.012, cap, 0, 0.07, 0);
     add(held, 0.036, 0.09, 0.074, skin, -BW / 2 - 0.016, -0.004, 0);   // the chubby paw
-    for (const [y, z, r] of [[0.03, -0.03, 0.02], [0, -0.038, 0.021], [-0.03, -0.03, 0.02], [0.044, 0.008, 0.018], [-0.044, 0.01, 0.019]]) {
-      puff(held, r, -BW / 2 - 0.03, y, z);                              // fluff on the back of the paw
-    }
     for (let i = 0; i < 4; i++) {                                       // fat toes round the bottle, beans + claws
       const y = 0.03 - i * 0.02;
       const len = i === 3 ? 0.042 : 0.05;
@@ -592,15 +586,11 @@ class Viewmodel {
     }
     add(held, 0.044, 0.026, 0.026, skin, -0.008, 0.022, -BW / 2 - 0.012);   // dewclaw
 
-    const arm = new THREE.Group();                                      // wrist, bracelet, fluffy forearm, sleeve
+    const arm = new THREE.Group();                                      // wrist, bracelet, forearm, sleeve
     arm.rotation.set(-0.75, 0, -0.3);
     hand.add(arm);
     add(arm, 0.066, 0.07, 0.066, skin, 0, -0.03, 0);
     add(arm, 0.07, 0.014, 0.07, gold, 0, -0.05, 0);
-    for (let k = 0; k < 7; k++) {                                       // fur bursting out of the sleeve
-      const a = (k / 7) * Math.PI * 2;
-      puff(arm, 0.02, Math.cos(a) * 0.036, -0.075, Math.sin(a) * 0.036);
-    }
     add(arm, 0.075, 0.3, 0.075, sleeve, 0, -0.22, 0);
 
     hand.scale.setScalar(0.68);                       // the left hand is a bit smaller than the right
@@ -608,10 +598,11 @@ class Viewmodel {
     vm.group.add(hand);
     vm.hand = hand;
     vm.grip = grip;
+    vm.held = held;
 
     const streamGeo = new THREE.BoxGeometry(0.012, 1, 0.012);
     streamGeo.translate(0, -0.5, 0); // hangs down from its top
-    vm.stream = new THREE.Mesh(streamGeo, lam(vm.vessel.color, { emissive: new THREE.Color(vm.vessel.color).multiplyScalar(0.25), transparent: true, opacity: 0.8 }));   // same colour as the glass's soap
+    vm.stream = new THREE.Mesh(streamGeo, lam(WATER.color, { emissive: WATER.glow, transparent: true, opacity: 0.8 }));   // the same blue water as in the glass
     vm.stream.visible = false;
     vm.group.add(vm.stream);
 
@@ -707,16 +698,21 @@ class Viewmodel {
   }
 
   // Refill choreography, p = 0..1 through the refill:
-  //   hand comes in → tips the bottle → pours → tips back → leaves
+  //   hand comes in → tips the bottle → the spout docks on the glass (clink) → squeezes…
+  //   nothing comes out, harder, trembling… SPLURT! → pours → tips back → leaves
+  static get POUR_BURST() { return 0.52; }        // when the squeezed bottle finally lets go
   static reloadPhases(p) {
     const ease = t => t * t * (3 - 2 * t);
     const clamp01 = t => Math.max(0, Math.min(1, t));
-    const inT = ease(clamp01(p / 0.2));
+    const B = Viewmodel.POUR_BURST;
+    const inT = ease(clamp01(p / 0.18));
     const outT = ease(clamp01((p - 0.88) / 0.12));
-    const tilt = ease(clamp01((p - 0.2) / 0.12)) - ease(clamp01((p - 0.78) / 0.1));
-    const fill = clamp01((p - 0.32) / 0.46);
-    const pouring = p > 0.3 && p < 0.8;
-    return { reach: inT - outT, tilt, fill, pouring };
+    const tilt = ease(clamp01((p - 0.16) / 0.12)) - ease(clamp01((p - 0.8) / 0.08));
+    const dock = ease(clamp01((p - 0.22) / 0.08)) - ease(clamp01((p - 0.8) / 0.06));   // spout on the glass
+    const squeeze = p < 0.3 ? 0 : p < B ? ease(clamp01((p - 0.3) / (B - 0.3))) : Math.max(0, 1 - (p - B) / 0.03);
+    const fill = 0.06 * ease(clamp01((p - 0.32) / (B - 0.32))) + 0.94 * ease(clamp01((p - B) / 0.26));   // a drip… then the lot
+    const pouring = p > B && p < 0.8;
+    return { reach: inT - outT, tilt, dock, squeeze, fill, pouring };
   }
 
   // Hold a grenade instead of a blaster (kind = null to go back to the blaster).
@@ -811,18 +807,43 @@ class Viewmodel {
     g.position.set(vm.restPos.x + bx - lean * 0.02, vm.restPos.y + by - lean * 0.04, vm.restPos.z + this.kick * 0.05);
     g.rotation.set(this.kick * 0.06 + lean * 0.12, 0, lean * 0.22);
     this._applyInspect(g, dt);
-    if (sassy) {
-      g.rotation.z += this.sassy.wobble;                // she bumped the jar
-      g.rotation.x += this.sassy.wobble * 0.4;
-      this.sassy.play(this.reloadStyle, t, dt, vm);
-    } else this.sassy.hide();
+    g.rotation.z += this.sassy.wobble;                  // something bumped the jar
+    g.rotation.x += this.sassy.wobble * 0.4;
+    if (sassy) this.sassy.play(this.reloadStyle, t, dt, vm);
+    else this.sassy.hide(reloading ? dt : 0);
 
     vm.hand.visible = reloading && ph.reach > 0.001;
     if (vm.supportPaw) vm.supportPaw.visible = !reloading;   // that paw is busy refilling
     vm.stream.visible = false;
+    const lastT = this._pourT || 0;
+    this._pourT = reloading && !sassy ? t : 0;
     if (vm.hand.visible) {
       vm.hand.position.lerpVectors(vm.handAway, vm.handPour, ph.reach);
       vm.grip.rotation.z = vm.pourTilt * ph.tilt;
+      const sq = ph.squeeze;                            // the paw squeezes the bottle
+      vm.held.scale.set(1 - 0.066 * sq, 1 + 0.02 * sq, 1 - 0.03 * sq);
+      // the spout rests right on top of the glass
+      const top = this._v2 || (this._v2 = new THREE.Vector3());
+      const lift = ph.pouring ? 0.075 * Math.min(1, (t - Viewmodel.POUR_BURST) / 0.04) * Math.min(1, (0.8 - t) / 0.04) : 0;
+      top.set(0, vm.jarTopY + 0.002 + lift, JAR.z);       // (lifted a little while it pours, to see the stream)
+      if (ph.dock > 0) {
+        g.updateMatrixWorld(true);
+        const tip = g.worldToLocal(vm.held.localToWorld(this._v.set(0, 0.078, 0)));
+        vm.hand.position.addScaledVector(tip.sub(top).negate(), ph.dock);
+      }
+      if (sq > 0 && t < Viewmodel.POUR_BURST) {         // harder… harder… trembling
+        vm.hand.position.x += Math.sin(t * 260) * 0.0012 * sq;
+        vm.hand.position.y += Math.sin(t * 337 + 1) * 0.0009 * sq;
+      }
+      const at = x => lastT < x && t >= x;
+      if (at(0.3)) { Sound.clink(0.7); this.sassy._bump(0.8); }
+      if (at(Viewmodel.POUR_BURST)) {                   // SPLURT!
+        Sound.plop(); Sound.clink();
+        this.sassy._bump(2);
+        g.updateMatrixWorld(true);
+        this.sassy._spark(g.localToWorld(top.clone()), 8, 'water');
+      }
+      if (ph.pouring && Math.random() < 0.25) Sound.pour(0.8);
       if (ph.pouring) {
         g.updateMatrixWorld(true);
         const s = vm.spout.getWorldPosition(this._v);

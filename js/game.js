@@ -385,7 +385,7 @@ class Game {
     }
     const end = eye.clone().addScaledVector(dir, best);
     const from = muzzle || shooter.model.muzzlePosition(new THREE.Vector3());
-    this.effects.bubbleTrail(from, end);
+    this.effects.shotTrail(from, end);
     if (this.isGuest) {                            // the guest only draws it (and tells the host)
       if (!target && wallHit) { this.effects.bubbleBurst(wallHit.point, wallHit.normal, 3, 1.2); this.effects.foamSpot(wallHit.point, wallHit.normal); }
       if (shooter.isPlayer) this.net.out({ t: 'shot', eye: v3(eye), dir: v3(dir), k: def.key });

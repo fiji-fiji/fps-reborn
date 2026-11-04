@@ -91,20 +91,47 @@ class Effects {
     b.life = b.max = life;
   }
 
-  // A stream of bubbles from the flower to where the shot landed.
-  bubbleTrail(from, to) {
-    const dist = from.distanceTo(to);
-    const n = Math.min(10, Math.max(2, Math.floor(dist / 1.8)));   // a light trail, not a wall of bubbles
-    const p = new THREE.Vector3(), v = new THREE.Vector3();
-    const dir = to.clone().sub(from).normalize();
-    for (let i = 0; i < n; i++) {
-      const t = (i + Math.random() * 0.5) / n;
-      p.lerpVectors(from, to, t);
-      p.x += (Math.random() - 0.5) * 0.08;
-      p.y += (Math.random() - 0.5) * 0.08;
-      p.z += (Math.random() - 0.5) * 0.08;
-      v.copy(dir).multiplyScalar(1.2).add(this._rand(0.3));
-      this.bubble(p, v, 0.02 + Math.random() * 0.03, 0.25 + Math.random() * 0.3);
+  // A shot's trail: a thin streak of water from the flower to where the shot landed
+  // (a plain tracer, gone in a blink: a bright core inside a soft blue glow).
+  shotTrail(from, to) {
+    if (!this.trails) {
+      const geo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
+      geo.rotateX(Math.PI / 2);                    // along +z, from 0 to 1
+      geo.translate(0, 0, 0.5);
+      const mat = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+      this.trails = [];
+      this.trailNext = 0;
+      for (let i = 0; i < 24; i++) {
+        const core = new THREE.Mesh(geo, mat(0xeefcff, 0.85)), glow = new THREE.Mesh(geo, mat(0x5cc8ff, 0.3));
+        core.frustumCulled = glow.frustumCulled = false;
+        core.visible = glow.visible = false;
+        this.scene.add(core, glow);
+        this.trails.push({ core, glow, life: 0 });
+      }
+    }
+    const len = from.distanceTo(to);
+    if (len < 0.05) return;
+    const tr = this.trails[this.trailNext];
+    this.trailNext = (this.trailNext + 1) % this.trails.length;
+    for (const [m, r] of [[tr.core, 0.008], [tr.glow, 0.022]]) {
+      m.position.copy(from);
+      m.lookAt(to);
+      m.scale.set(r, r, len);
+      m.visible = true;
+    }
+    tr.life = tr.max = 0.11;
+  }
+
+  _updateTrails(dt) {
+    if (!this.trails) return;
+    for (const tr of this.trails) {
+      if (tr.life <= 0) continue;
+      tr.life -= dt;
+      const k = Math.max(0, tr.life / tr.max);
+      tr.core.material.opacity = 0.85 * k;
+      tr.glow.material.opacity = 0.3 * k;
+      tr.core.scale.x = tr.core.scale.y = 0.008 * (0.4 + 0.6 * k);   // thins out as it fades
+      if (tr.life <= 0) tr.core.visible = tr.glow.visible = false;
     }
   }
 
@@ -261,6 +288,7 @@ class Effects {
   update(dt, world) {
     const time = performance.now() / 1000;
     this._updatePixels(dt, world);
+    this._updateTrails(dt);
     if (this.stars) for (let i = this.stars.length - 1; i >= 0; i--) {
       const st = this.stars[i];
       st.life -= dt;
