@@ -384,4 +384,264 @@ const MAPS = {
       };
     },
   },
+  // ------------------------------------------------------------------
+  // Barcelona: an original seaside city, 1.5x bigger than the other maps.
+  // Attackers start on the beach (east), defenders in a town square (west).
+  //   North:      Site A, the old market hall (green iron, a coloured-glass arcade).
+  //               Reached along the seafront and the top street, or up the old-town alley from mid.
+  //   Mid:        an eight-sided plaza with a mosaic fountain. A long tree-lined promenade
+  //               runs to it from the beach; Silk Street cuts north from the promenade to A's street.
+  //   South-west: Site B, a mosaic park with a raised terrace. Reached along the harbour
+  //               street, or down the covered passage from mid.
+  //   Defenders:  a north lane to A, a south lane to B, a kinked street to mid, and a cross
+  //               street linking the north lane to the old-town alley.
+  barcelona: {
+    name: 'Barcelona',
+    size: [144, 20, 144],
+    build(w) {
+      const S = w.sx, G = 2;
+      const rng = makeRng(1888);
+      const decor = [];
+
+      w.fill(0, 0, 0, S - 1, 0, S - 1, B.gothic);
+      w.fill(0, 1, 0, S - 1, 1, S - 1, B.panot);
+
+      // city blocks: a shop at street level, painted floors with balconies, terracotta roof
+      const walls = [B.bcn_ochre, B.bcn_pink, B.bcn_cream, B.bcn_ochre];
+      const shops = [B.shop_green, B.shop_red, B.shop_blue];
+      for (let cz = 0; cz < S / 8; cz++)
+        for (let cx = 0; cx < S / 8; cx++) {
+          const top = 9 + Math.floor(rng() * 5);
+          const wall = walls[Math.floor(rng() * walls.length)], shop = shops[Math.floor(rng() * shops.length)];
+          for (let y = G; y <= top; y++) {
+            const id = y === G ? shop : y === top ? B.terracotta : y === top - 1 ? B.stucco : wall;
+            w.fill(cx * 8, y, cz * 8, cx * 8 + 7, y, cz * 8 + 7, id);
+          }
+        }
+      // tall plain walls for the big site letters
+      w.fill(46, G, 3, 80, 14, 7, B.stucco);
+      w.fill(22, G, 100, 43, 13, 103, B.stucco);
+      // outer walls (the east side is the sea)
+      w.fill(0, G, 0, S - 1, 15, 1, B.gothic);
+      w.fill(0, G, S - 2, S - 1, 15, S - 1, B.gothic);
+      w.fill(0, G, 0, 1, 15, S - 1, B.gothic);
+
+      const carve = (x0, z0, x1, z1) => w.fill(x0, G, z0, x1, w.sy - 1, z1, 0);
+      // big open places
+      carve(6, 56, 23, 75);      // defender spawn: the town square
+      carve(118, 60, S - 1, 92); // attacker spawn: the beach
+      carve(50, 8, 76, 32);      // Site A: the market hall
+      carve(24, 104, 52, 128);   // Site B: the mosaic park
+      carve(56, 56, 82, 82);     // mid plaza (its corners are cut off below)
+      // attacker side
+      carve(83, 64, 117, 74);    // the promenade: beach -> mid
+      carve(120, 14, 127, 59);   // seafront street, north
+      carve(84, 14, 127, 21);    // top street, west to A
+      carve(77, 15, 83, 20);     // A main gate
+      carve(90, 22, 94, 63);     // Silk Street: promenade -> top street
+      carve(118, 93, 127, 117);  // seafront street, south
+      carve(58, 110, 127, 117);  // harbour street -> B
+      carve(53, 111, 57, 116);   // B main gate
+      carve(84, 101, 98, 109);   // the old shipyard (a side room off the harbour street)
+      // mid
+      carve(64, 33, 68, 55);     // old-town alley: mid -> A
+      carve(44, 73, 55, 77);     // mid -> covered passage
+      carve(44, 73, 49, 103);    // covered passage -> B
+      // defender side
+      carve(16, 20, 22, 55);     // north lane
+      carve(16, 20, 49, 25);     // ... east into A
+      carve(12, 76, 19, 111);    // south lane
+      carve(12, 106, 23, 112);   // ... east into B
+      carve(24, 60, 42, 64);     // spawn -> mid, with a kink
+      carve(38, 60, 42, 70);
+      carve(42, 66, 55, 70);
+      carve(23, 42, 63, 46);     // cross street: north lane <-> old-town alley
+
+      // the mid plaza has its corners cut off (an eight-sided square)
+      for (let x = 56; x <= 82; x++)
+        for (let z = 56; z <= 82; z++) {
+          const dx = Math.min(x - 56, 82 - x), dz = Math.min(z - 56, 82 - z);
+          if (dx + dz < 6) { w.fill(x, G, z, x, 10, z, B.bcn_cream); w.set(x, 11, z, B.terracotta); }
+        }
+
+      // ---------------- floors ----------------
+      const floor = (x0, z0, x1, z1, id) => w.fill(x0, 1, z0, x1, 1, z1, id);
+      floor(83, 67, 117, 71, B.wave_tile);          // promenade walk
+      floor(64, 33, 68, 55, B.cobble);              // old town
+      floor(23, 42, 63, 46, B.cobble);
+      floor(50, 8, 76, 32, B.plaza);                // market hall
+      floor(24, 104, 52, 128, B.gravel);            // park
+      floor(84, 101, 98, 109, B.planks);            // shipyard
+      // beach: boardwalk, sand, then the sea (shallow, you can wade in)
+      floor(118, 60, 121, 92, B.planks);
+      floor(122, 60, 135, 92, B.sand);
+      for (let x = 136; x < S; x++)
+        for (let z = 60; z <= 92; z++) { w.set(x, 1, z, B.water); w.set(x, 0, z, B.sand); }
+      decor.push({ type: 'sea', x: S + 150, y: 1.85, z: 72, w: 300, d: 600 });
+
+      // ---------------- the old-town alley: stone walls and arches overhead ----------------
+      for (let z = 33; z <= 55; z++)
+        for (let y = G; y <= 12; y++)
+          for (const x of [63, 69]) if (w.get(x, y, z)) w.set(x, y, z, B.gothic);
+      for (const z of [39, 49]) {
+        w.fill(64, G + 4, z, 68, G + 5, z, B.gothic);
+        w.set(64, G + 3, z, B.gothic_slab); w.set(68, G + 3, z, B.gothic_slab);
+      }
+      for (let x = 24; x <= 62; x++)
+        for (let y = G; y <= 12; y++)
+          for (const z of [41, 47]) if (w.get(x, y, z)) w.set(x, y, z, B.gothic);
+      w.fill(36, G + 4, 42, 36, G + 5, 46, B.gothic);           // an arch over the cross street
+      w.fill(28, G, 43, 28, G, 44, B.crate);                    // a little cover
+
+      // ---------------- Site A: the market hall ----------------
+      // coloured-glass arcade along the north wall, on green iron pillars
+      w.fill(50, G + 4, 8, 76, G + 4, 11, B.stained_glass);
+      for (let x = 50; x <= 76; x += 6) w.fill(x, G, 11, x, G + 3, 11, B.iron_green);
+      // a few lone pillars out in the hall (thin cover)
+      for (const [x, z] of [[56, 19], [70, 19], [56, 27], [70, 27]]) w.fill(x, G, z, x, G + 3, z, B.iron_green);
+      // market stalls: a counter, iron posts and a striped roof
+      const marketStall = (x0, z0, x1, z1, cloth) => {
+        w.fill(x0, G, z1, x1, G, z1, B.planks);
+        for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) w.fill(x, G, z, x, G + 2, z, B.iron_green);
+        w.fill(x0, G + 3, z0, x1, G + 3, z1, cloth);
+        decor.push({ type: 'flowers', x0: x0 + 1, z0: z1, x1: x1 - 1, z1, y: G + 1 });
+      };
+      marketStall(52, 13, 55, 15, B.cloth_yellow);
+      marketStall(71, 13, 74, 15, B.cloth_red);
+      marketStall(60, 23, 64, 25, B.cloth_green);
+      w.fill(73, G, 29, 74, G + 1, 30, B.crate); w.set(73, G + 2, 29, B.crate);
+      w.fill(51, G, 30, 52, G, 31, B.crate);
+      w.set(75, G, 22, B.crate);
+      w.fill(58, G, 30, 60, G, 30, B.crate);
+      paintLetter(w, 'A', 61, 13, 7, B.paint_pink);
+
+      // ---------------- mid: the eight-sided plaza with a mosaic fountain ----------------
+      const fx = 69.5, fz = 69.5;
+      for (let x = 64; x <= 75; x++)
+        for (let z = 64; z <= 75; z++) {
+          const d = Math.hypot(x + 0.5 - fx, z + 0.5 - fz);
+          if (d < 3.2) w.set(x, G, z, B.water);
+          else if (d < 4.3) w.set(x, G, z, B.trencadis_slab);
+        }
+      w.fill(69, G, 69, 69, G + 2, 69, B.trencadis);
+      w.set(69, G + 3, 69, B.gilded);
+      for (const [x, z] of [[60, 60], [78, 60], [60, 78], [78, 78]]) orangeTree(w, x, G, z, decor);
+      for (const [x0, z0, x1, z1] of [[61, 64, 61, 67], [77, 71, 77, 74], [66, 59, 68, 59], [70, 79, 72, 79]])
+        w.fill(x0, G, z0, x1, G, z1, B.trencadis_slab);            // mosaic benches (low cover)
+      w.fill(57, G, 63, 58, G + 1, 63, B.crate);
+      for (const [x, z] of [[57, 70], [81, 63], [69, 57], [63, 81]]) decor.push({ type: 'lamp', x: x + 0.5, y: G, z: z + 0.5 });
+
+      // ---------------- the promenade: plane trees, flower kiosks, cafe tables ----------------
+      for (const x of [86, 98, 104, 110, 116]) planeTree(w, x, G, 65, decor);
+      for (const x of [86, 92, 98, 104, 110, 116]) planeTree(w, x, G, 73, decor);
+      for (const [x0, cloth] of [[94, B.cloth_yellow], [106, B.cloth_red]]) {
+        w.fill(x0, G, 68, x0 + 2, G + 1, 70, B.iron_green);       // kiosk
+        w.fill(x0 - 1, G + 2, 67, x0 + 3, G + 2, 71, cloth);       // its roof
+        decor.push({ type: 'flowers', x0: x0 - 1, z0: 67, x1: x0 + 3, z1: 67, y: G });
+        decor.push({ type: 'flowers', x0: x0 - 1, z0: 71, x1: x0 + 3, z1: 71, y: G });
+      }
+      for (const [x, z] of [[88, 67], [88, 71], [101, 67], [113, 71]]) decor.push({ type: 'table', x: x + 0.5, y: G, z: z + 0.5 });
+      for (let x = 89; x <= 115; x += 13) { decor.push({ type: 'lamp', x: x + 0.5, y: G, z: 64.5 }); decor.push({ type: 'lamp', x: x + 0.5, y: G, z: 74.5 }); }
+
+      // ---------------- the attackers' streets ----------------
+      w.fill(100, G, 15, 101, G + 1, 16, B.crate);                 // top street
+      w.fill(112, G, 19, 112, G, 20, B.crate);
+      w.set(88, G, 21, B.crate);
+      for (const [x, z] of [[105, 20], [108, 20]]) decor.push({ type: 'table', x: x + 0.5, y: G, z: z + 0.5 });
+      for (let z = 24; z <= 56; z += 10) decor.push({ type: 'lamp', x: 127.5, y: G, z: z + 0.5 });
+      w.fill(120, G, 40, 121, G, 41, B.crate);                     // seafront north
+      w.set(92, G, 44, B.crate);                                   // Silk Street
+      w.fill(90, G, 31, 90, G + 1, 32, B.crate);
+      w.fill(123, G, 101, 124, G + 1, 102, B.crate);               // seafront south
+      // harbour street: crates, barrels and iron bollards along the quay
+      w.fill(70, G, 111, 71, G + 1, 112, B.crate); w.set(70, G + 2, 111, B.crate);
+      w.set(82, G, 116, B.crate);
+      w.fill(100, G, 110, 101, G, 110, B.crate);
+      w.fill(112, G, 114, 112, G + 1, 115, B.crate);
+      w.fill(62, G, 116, 63, G, 116, B.crate);
+      for (let x = 60; x <= 124; x += 8) w.set(x, G, 117, B.iron);
+      // the old shipyard: red brick inside, stacks of crates
+      for (let x = 83; x <= 99; x++)
+        for (let y = G; y <= 10; y++)
+          for (const z of [100]) if (w.get(x, y, z)) w.set(x, y, z, B.brick_red);
+      for (let z = 100; z <= 109; z++)
+        for (let y = G; y <= 10; y++)
+          for (const x of [83, 99]) if (w.get(x, y, z)) w.set(x, y, z, B.brick_red);
+      w.fill(86, G, 102, 87, G + 2, 103, B.crate);
+      w.fill(94, G, 104, 96, G + 1, 105, B.crate);
+      w.set(90, G, 107, B.crate);
+
+      // ---------------- the beach (attacker spawn) ----------------
+      for (const [x, z] of [[124, 61], [132, 62], [124, 91], [133, 90]]) palmTree(w, x, G, z, 6);
+      for (const [x, z, color] of [[129, 67, 'coral'], [131, 79, 'blue'], [127, 86, 'coral'], [134, 73, 'blue']])
+        decor.push({ type: 'umbrella', x: x + 0.5, y: G, z: z + 0.5, color });
+
+      // ---------------- the covered passage: a roof on arches ----------------
+      w.fill(44, G + 4, 80, 49, G + 4, 98, B.brick_red);
+      for (let z = 80; z <= 98; z += 6) { w.set(44, G + 3, z, B.gothic_slab); w.set(49, G + 3, z, B.gothic_slab); }
+      w.set(48, G, 88, B.crate);
+
+      // ---------------- Site B: the mosaic park ----------------
+      // a raised stone terrace in the south-west corner with mosaic steps and a wavy mosaic bench
+      w.fill(27, G, 120, 35, G, 128, B.gothic);
+      for (let x = 26; x <= 36; x++) w.set(x, G, 119, B.trencadis_slab);
+      for (let z = 120; z <= 128; z++) { w.set(26, G, z, B.trencadis_slab); w.set(36, G, z, B.trencadis_slab); }
+      for (let x = 28; x <= 34; x++) w.set(x, G + 1, x % 2 ? 122 : 123, B.trencadis_slab);
+      // a mosaic planter in the middle, benches and a hedge
+      w.fill(38, G, 110, 39, G, 111, B.trencadis);
+      decor.push({ type: 'flowers', x0: 38, z0: 110, x1: 39, z1: 111, y: G + 1 });
+      w.fill(30, G, 113, 33, G, 113, B.trencadis_slab);
+      w.fill(41, G, 117, 44, G, 117, B.trencadis_slab);
+      w.fill(46, G, 122, 50, G, 122, B.hedge);
+      w.fill(49, G, 106, 50, G + 1, 107, B.crate);
+      w.fill(34, G, 116, 35, G + 1, 116, B.crate); w.set(34, G + 2, 116, B.crate);
+      w.fill(45, G, 111, 46, G, 112, B.trencadis);
+      decor.push({ type: 'flowers', x0: 45, z0: 111, x1: 46, z1: 112, y: G + 1 });
+      for (const [x, z] of [[28, 106], [50, 126], [42, 125]]) orangeTree(w, x, G, z, decor);
+      palmTree(w, 25, G, 116, 6);
+      paintLetter(w, 'B', 30, 11, 103, B.paint_teal);
+
+      // ---------------- the defenders' side ----------------
+      for (const [x, z] of [[7, 57], [22, 57], [7, 74], [22, 74]]) orangeTree(w, x, G, z, decor);
+      for (const [x, z] of [[14, 57], [14, 74]]) decor.push({ type: 'lamp', x: x + 0.5, y: G, z: z + 0.5 });
+      w.fill(34, G, 21, 35, G + 1, 22, B.crate);                   // north lane -> A
+      w.set(16, G, 38, B.crate);
+      w.fill(18, G, 92, 19, G + 1, 93, B.crate);                   // south lane
+      w.fill(30, G, 62, 30, G, 63, B.crate);                       // spawn -> mid
+
+      // the basilica's spires on the horizon
+      decor.push({ type: 'spires', x: -60, y: 0, z: -70 });
+
+      return {
+        spawn: { x: 128.5, y: G, z: 76.5, yaw: Math.PI / 2 },
+        decor,
+        spawns: {
+          attack: { x0: 122, z0: 64, x1: 133, z1: 88, yaw: Math.PI / 2 },    // face west
+          defend: { x0: 8, z0: 58, x1: 21, z1: 73, yaw: -Math.PI / 2 },     // face east
+        },
+        sites: {
+          A: { x0: 50, z0: 8, x1: 76, z1: 32, entrances: [[80, 18], [66, 35], [47, 23]], via: [[104, 18], [92, 42], [66, 50]] },
+          B: { x0: 24, z0: 104, x1: 52, z1: 128, entrances: [[56, 114], [46, 101], [21, 109]], via: [[96, 114], [46, 88]] },
+        },
+        mid: [[69, 60], [60, 70], [77, 76], [62, 77]],
+        midWatch: [[84, 69], [66, 50], [46, 75], [50, 68]],
+        points: [
+          [56, 20], [70, 22], [63, 29], [74, 12],                   // Site A
+          [32, 110], [44, 122], [31, 125], [48, 108],               // Site B
+          [69, 62], [61, 70], [76, 77], [63, 76],                   // mid
+          [100, 69], [112, 70], [88, 69],                           // promenade
+          [123, 30], [104, 18], [92, 40], [80, 18],                 // north routes
+          [123, 104], [96, 114], [70, 114], [90, 105],              // south routes
+          [66, 44], [46, 88], [40, 44], [19, 38], [15, 92], [33, 62], [50, 68],
+          [128, 76], [14, 66],                                      // spawns
+        ],
+      };
+    },
+  },
 };
+
+// A little orange tree: a short trunk (solid) with a round crown full of oranges (decoration).
+function orangeTree(w, x, y, z, decor) {
+  w.fill(x, y, z, x, y + 2, z, B.bark);
+  decor.push({ type: 'orange', x: x + 0.5, y: y + 2.2, z: z + 0.5 });
+}

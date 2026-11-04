@@ -119,6 +119,14 @@ class Game {
           this.entities.push(bot);
         });
       }
+      // everyone gets their own hat, with a flower in their own player colour
+      let hatN = 0;
+      for (const team of ['blue', 'red']) {
+        this.entities.filter(e => e.team === team && e.model).forEach((e, i) => {
+          e.color = PLAYER_COLORS[i % PLAYER_COLORS.length];
+          e.model.addHat(HAT_STYLES[hatN++ % HAT_STYLES.length], e.color);
+        });
+      }
       this.mode = modeName === 'skirmish' ? new SkirmishMode(this)
         : new StandardMode(this, modeName === 'swiftplay' ? SWIFTPLAY : {});
     } else {
@@ -216,7 +224,8 @@ class Game {
       cell = c;
       if (!crowded) break;
     }
-    const yaw = side === 'attack' ? 0 : Math.PI;   // attackers face north, defenders south
+    // a map can say which way each spawn faces; otherwise attackers face north, defenders south
+    const yaw = rect.yaw !== undefined ? rect.yaw : side === 'attack' ? 0 : Math.PI;
     e.spawn(cell[0] + 0.5, this.nav.floorAt(cell[0], cell[1]), cell[1] + 0.5, yaw);
   }
 
@@ -243,7 +252,27 @@ class Game {
   }
 
   // A nearby walkable spot that someone at `threatEye` can't see. Returns [x, z] or null.
-  findCover(from, threatEye, radius = 9) {
+  // ---- team intel: what each team knows about where its enemies are (like call-outs) ----
+  // seen = actually seen (exact); otherwise heard (rough).
+  addIntel(team, who, pos, seen) {
+    if (!this.intel) this.intel = {};
+    const list = this.intel[team] || (this.intel[team] = []);
+    const key = who || pos;
+    const old = list.find(i => i.who === key);
+    if (old && !seen && old.seen && this.time - old.t < 1.5) return;      // a fresh sighting beats a sound
+    const entry = old || { who: key };
+    entry.pos = pos.clone(); entry.t = this.time; entry.seen = seen;
+    if (!old) list.push(entry);
+    if (list.length > 12) list.shift();
+  }
+  // what `team` knows from the last `maxAge` seconds (living enemies only)
+  intelFor(team, maxAge = 8) {
+    const list = (this.intel && this.intel[team]) || [];
+    return list.filter(i => this.time - i.t <= maxAge && !(i.who && i.who.alive === false));
+  }
+
+  // Somewhere `threatEye` can't see. `toward` (optional): prefer spots closer to it (your teammates).
+  findCover(from, threatEye, radius = 9, toward = null) {
     const nav = this.nav, p = new THREE.Vector3();
     const [cx, cz] = nav.cellOf(from);
     let best = null, bestScore = Infinity;
@@ -257,7 +286,8 @@ class Game {
       if (this.lineOfSight(threatEye, p)) continue;               // they'd still see us there
       const dMe = Math.hypot(p.x - from.x, p.z - from.z);
       const dThreat = Math.hypot(p.x - threatEye.x, p.z - threatEye.z);
-      const score = dMe - dThreat * 0.3;                           // close to us, away from them
+      let score = dMe - dThreat * 0.3;                             // close to us, away from them
+      if (toward) score += Math.hypot(p.x - toward.x, p.z - toward.z) * 0.25;   // and back toward friends
       if (score < bestScore) { bestScore = score; best = [x, z]; }
     }
     return best;
@@ -265,7 +295,9 @@ class Game {
 
   // A good spot to guard from inside an area: next to a wall or crate, and able to
   // watch `watch` ([x, z]) from a sensible distance. Returns [x, z] or null.
-  findHoldSpot(rect, watch) {
+  // Whoever is closer to an angle loses: hold it from as far back as you can see it
+  // (unless you carry a close-range blaster, then stay close and pounce).
+  findHoldSpot(rect, watch, closeRange = false) {
     const nav = this.nav, p = new THREE.Vector3();
     const w = new THREE.Vector3(watch[0], this.mapInfo.spawn.y + 1.4, watch[1]);
     let best = null, bestScore = -Infinity;
@@ -277,7 +309,8 @@ class Game {
       const d = Math.hypot(p.x - w.x, p.z - w.z);
       if (d < 6 || !this.lineOfSight(p, w)) continue;
       const cover = nav.penalty[z * nav.sx + x] > 0 ? 2 : 0;     // tucked against something
-      const score = cover + (d > 8 && d < 22 ? 1 : 0) + Math.random() * 0.8;
+      const range = closeRange ? (d < 10 ? 1.5 : -0.5) : Math.min(d, 30) * 0.12;   // far back = safer
+      const score = cover + range + Math.random() * 0.8;
       if (score > bestScore) { bestScore = score; best = [x, z]; }
     }
     return best;
@@ -325,7 +358,7 @@ class Game {
       const dmg = Math.round(def.damage[part] * gun.falloff(best));
       this.applyHit(shooter, target, part, dmg, end, dir, def.key);
     } else if (wallHit) {
-      this.effects.bubbleBurst(wallHit.point, wallHit.normal, 6, 1.2);
+      this.effects.bubbleBurst(wallHit.point, wallHit.normal, 3, 1.2);
       this.effects.foamSpot(wallHit.point, wallHit.normal);
     }
   }
@@ -337,8 +370,9 @@ class Game {
       HUD.hitmarker(part, out, dmg);
       if (out) Sound.kill(); else if (part === 'head') Sound.headshot(); else Sound.hit();
     }
+    if (part === 'head' && !target.isPlayer) this.effects.starPop(targetPointOf(target, 'head', new THREE.Vector3()));
     if (!target.isPlayer && !out) {
-      this.effects.bubbleBurst(point, dir.clone().negate(), 6, 1.5);
+      this.effects.bubbleBurst(point, dir.clone().negate(), 4, 1.5);
       this.effects.confettiBurst(point, part === 'head' ? 10 : 5, 2);
     }
     if (out) this.pop(target, shooter, part, weapon);
@@ -357,30 +391,62 @@ class Game {
     const push = victim.pos.clone().sub(from).setY(0);
     if (push.lengthSq() > 1e-6) push.normalize();
     this.effects.pixelBurst(victim.burst(), center, push, PIXEL * 0.95);
-    Sound.shatter(this._volumeAt(center));
+    Sound.at(center, 'shatter', this._volumeAt(center));
     if (this.mode.kind !== 'practice') this.drops.drop(victim);   // their blaster falls to the ground
     this.mode.onOut(victim, attacker, part, weapon);
     for (const b of this.bots) if (b.alive && b.onPopped) b.onPopped(victim, attacker);
   }
 
   // Running makes noise (walking with Shift or crouching is silent).
+  // Footsteps (running only; walking and crouching are silent). Each step comes from that
+  // foot's exact spot (left, right, left…) and sounds like the ground it lands on.
   footsteps(e, dt) {
     const m = e.mover;
     const v = m.horizontalSpeed;
+    // landing after a jump or a drop: a thump everyone nearby hears
+    if (m.onGround && e._wasAir && (e._fallSpeed || 0) > 3) this._footSound(e, 'land', 1.1);
+    e._wasAir = !m.onGround;
+    e._fallSpeed = m.onGround ? 0 : Math.max(e._fallSpeed || 0, -m.vel.y);
     if (!m.onGround || v < PLAYER.walkSpeed + 0.4) { e.stepDist = 0; return; }
     e.stepDist = (e.stepDist || 0) + v * dt;
     if (e.stepDist > 2.1) {
       e.stepDist = 0;
-      Sound.step(e.isPlayer ? 0.35 : this._volumeAt(m.pos) * 0.9);
-      // enemy bots nearby hear it
-      for (const b of this.bots)
-        if (b.alive && b.team !== e.team && b.pos.distanceTo(m.pos) < 20) b.hear(m.pos.clone());
+      this._footSound(e, 'step', 1);
     }
+  }
+
+  _footSound(e, kind, loud) {
+    const m = e.mover;
+    const id = this.world.get(Math.floor(m.pos.x), Math.floor(m.pos.y - 0.05), Math.floor(m.pos.z));
+    const surface = Sound.surfaceOf(id && BLOCK_DEFS[id] ? BLOCK_DEFS[id].name : null);
+    e.foot = -(e.foot || 1);                                   // left, right, left…
+    if (e.isPlayer) { Sound[kind](0.32 * loud, surface); }
+    else {
+      const side = new THREE.Vector3(Math.cos(m.yaw), 0, -Math.sin(m.yaw)).multiplyScalar(0.14 * e.foot);
+      const at = m.pos.clone().add(side).setY(m.pos.y + 0.05);
+      Sound.at(at, kind, this._volumeAt(at) * 1.15 * loud, surface);
+    }
+    // enemy bots nearby hear it too
+    for (const b of this.bots)
+      if (b.alive && b.team !== e.team && b.pos.distanceTo(m.pos) < 22) b.hear(m.pos.clone(), 'step', e);
   }
 
   _volumeAt(p) {
     const d = this.camera.position.distanceTo(p);
     return 1 / (1 + d / 8);
+  }
+
+  // Refilling gurgles: enemies close by hear it.
+  reloadHeard(e) {
+    for (const b of this.bots)
+      if (b.alive && b.team !== e.team && b.pos.distanceTo(e.pos) < 12) b.hear(e.pos.clone(), 'reload', e);
+  }
+
+  // A gunshot: everyone hears it (you in 3D), bots get to know roughly where it came from.
+  shotHeard(shooter, pos, key) {
+    if (!shooter.isPlayer) Sound.at(pos, 'shoot', this._volumeAt(pos), key);
+    for (const b of this.bots)
+      if (b.alive && b.team !== shooter.team && b.pos.distanceTo(pos) < 40) b.hear(pos.clone(), 'shot', shooter);
   }
 
   // Characters can't stand inside each other: gently push overlapping pairs apart.

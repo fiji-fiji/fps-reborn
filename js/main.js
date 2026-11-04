@@ -1,5 +1,5 @@
 // Sets everything up and runs the game loop.
-// Settings come from the address bar: ?map=oasis&mode=standard&bots=easy
+// Settings come from the address bar: ?map=barcelona&mode=standard&bots=easy
 
 (() => {
   const canvas = document.getElementById('game');
@@ -72,7 +72,7 @@
   // --- settings from the address bar ---
   const params = new URLSearchParams(location.search);
   const choose = (name, allowed, fallback) => (allowed.includes(params.get(name)) ? params.get(name) : fallback);
-  const MAP_ID = choose('map', Object.keys(MAPS), 'oasis');
+  const MAP_ID = choose('map', Object.keys(MAPS), 'barcelona');
   const MODE = choose('mode', ['standard', 'swiftplay', 'skirmish'], 'standard');
   const BOTS = choose('bots', Object.keys(BOT_LEVELS), 'easy');
 
@@ -92,8 +92,16 @@
   }
 
   const effects = new Effects(scene);
+  effects.viewer = camera.position;                  // bubbles stay out of your face
   HUD.init({ mode: { hud: () => null } });   // HUD elements ready before the match starts
   const game = new Game({ scene, world, mapInfo, effects, camera, difficulty: BOTS, modeName: MODE });
+  const nature = new Nature(game, mapInfo);           // wind, swaying grass, petals, butterflies, birds
+  // sounds behind a wall come through muffled
+  Sound.setOccluder(pos => {
+    const from = camera.position, dir = pos.clone().sub(from), d = dir.length();
+    if (d < 1) return false;
+    return !!world.raycast(from, dir.divideScalar(d), d - 0.4);
+  });
   HUD.init(game);
   const me = game.player;
   const viewmodel = new Viewmodel(viewCamera);
@@ -250,7 +258,10 @@
     if (Input.justPressed('Digit1')) switchTo('main');
     if (Input.justPressed('Digit2')) switchTo('side');
     if (Input.justPressed('Digit3')) switchTo('knife');
-    if (Input.justPressed('Digit4')) switchTo('seed');
+    // 4: take out the seed (and hold 4 to plant it). Defending a planted tree, hold 4 next to it to cut it down.
+    const nearTree = mode.phase === 'planted' && mode.sideOf && mode.sideOf(me.team) === 'defend' && mode.boo &&
+      flatDist(me.pos, mode.boo.pos) <= BOOBOO.uprootReach + 0.5;
+    if (Input.justPressed('Digit4') && !nearTree) switchTo('seed');
     if (Input.justPressed('Digit5')) pickNade();
     if (Input.justPressed('KeyQ')) switchTo(me.slot === 'main' ? 'side' : 'main');
     if (Input.justPressed('KeyB')) shop.open();
@@ -259,9 +270,10 @@
     const gun = me.gun;
     const planting = mode.planter === me;
     plantLook += ((planting ? 1 : 0) - plantLook) * Math.min(1, dt * 6);
-    viewmodel.holdSeed(me.slot === 'seed' && plantLook < 0.05);
     if (me.slot !== 'nade' && me.slot !== 'seed') { viewmodel.holdNade(null); viewmodel.setGun(gun); hideArc(); }
     if (me.slot === 'seed') { viewmodel.holdNade(null); hideArc(); }
+    viewmodel.holdSeed(me.slot === 'seed' && plantLook < 0.05);       // (after holdNade, which would bring the blaster back)
+    if (me.slot === 'seed') viewmodel.setVisible(false);
 
     // Lily zoom (right mouse)
     view.scoped = me.slot !== 'nade' && !!gun.def.scope && Input.rightDown && !gun.busy;
@@ -277,7 +289,7 @@
       const lookDown = Math.atan2(dp.y + 0.15 - eyeY, Math.max(0.3, Math.hypot(dp.x - m.pos.x, dp.z - m.pos.z)));
       m.pitch += (lookDown - m.pitch) * Math.min(1, dt * 12);
     }
-    me.actionHeld = (Input.held('KeyE') || (me.slot === 'seed' && Input.mouseDown)) && !mode.frozen;
+    me.actionHeld = Input.held('Digit4') && !mode.frozen && (me.carrying || nearTree || mode.defuser === me);
     m.update(dt, stuck ? NO_INPUT : {
       fwd: (Input.held('KeyW') ? 1 : 0) - (Input.held('KeyS') ? 1 : 0),
       right: (Input.held('KeyD') ? 1 : 0) - (Input.held('KeyA') ? 1 : 0),
@@ -303,8 +315,9 @@
     triggerWasDown = down;
     rightWasDown = Input.rightDown;
     if (me.slot === 'nade') { handleNade(dt, locked, pressed, rightPressed); return; }
-    if (me.slot === 'seed') return;                    // holding the seed: click/E plants (see actionHeld)
-    if (Input.justPressed('KeyR') && gun.startReload()) Sound.reload();
+    if (me.slot === 'seed') return;                    // holding the seed: hold 4 to plant (see actionHeld)
+    if (Input.justPressed('KeyR') && gun.startReload()) { Sound.reload(); game.reloadHeard(me); }
+    if (Input.justPressed('KeyY')) viewmodel.inspect();
 
     if (gun.def.melee) {
       // knife: swipe; pops anyone right in front of you
@@ -338,10 +351,11 @@
           for (const dir of gun.fire(m.yaw, m.pitch, m, view.scoped)) game.fireShot(me, eye, dir, gun, from);
           viewmodel.onFire();
           Sound.shoot(1, gun.def.key);
+          game.shotHeard(me, eye, gun.def.key);            // enemies hear where you shot from
         } else {
           Sound.click();
           gun.cooldown = 0.25;
-          if (gun.startReload()) Sound.reload();
+          if (gun.startReload()) { Sound.reload(); game.reloadHeard(me); }
         }
       }
     }
@@ -460,6 +474,8 @@
       wasDown = Input.mouseDown;
       game.update(dt);
       effects.update(dt, world);
+      nature.update(dt, camera.position);
+      Sound.listen(camera);                            // your ears follow the camera
       shop.update();
       view.haze = game.throwables.smokeAt(camera.position);
       HUD.update(dt, me, game.mode, view);

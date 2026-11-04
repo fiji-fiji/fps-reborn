@@ -7,6 +7,9 @@ const fmtTime = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStar
 const keysToHtml = s => String(s || '').replace(/\[([^\]]+)\]/g, '<kbd>$1</kbd>');
 const fmtMoney = n => n.toLocaleString('en-US');
 
+// 0xRRGGBB -> '#rrggbb'
+const cssHex = n => '#' + n.toString(16).padStart(6, '0');
+
 const HUD = {
   init(game) {
     this.game = game;
@@ -62,6 +65,10 @@ const HUD = {
 
   hitmarker(part, out, damage) {
     this.el.hit.className = out ? 'kill' : part === 'head' ? 'head' : '';
+    if (part === 'head') {                                   // a big gold star pops round the crosshair
+      const st = document.getElementById('headStar');
+      st.classList.remove('pop'); void st.offsetWidth; st.classList.add('pop');
+    }
     this.hitTime = 0.15;
     const d = this.el.dmg;
     d.textContent = out ? 'POP!' : part === 'head' ? `BULLSEYE ${damage}` : `${damage}`;
@@ -119,7 +126,7 @@ const HUD = {
     const rows = team => game.entities.filter(e => e.team === team)
       .sort((a, b) => b.stats.pops - a.stats.pops)
       .map(e => `<tr class="${e.alive ? '' : 'out'}${e === me ? ' me' : ''}">
-        <td style="color:${TEAM_CSS[e.team]}">${e.name}${e.carrying && team === me.team ? ' ✿' : ''}</td>
+        <td style="color:${TEAM_CSS[e.team]}">${e.color !== undefined ? `<span class="pdot" style="background:${cssHex(e.color)}"></span>` : ''}${e.name}${e.carrying && team === me.team ? ' ✿' : ''}</td>
         <td>${e.stats.pops}</td><td>${e.stats.outs}</td>
         <td>${team === me.team && game.mode.kind === 'standard' ? WeaponIcons.money(0.9) + ' ' + fmtMoney(e.money) : ''}</td></tr>`).join('');
     const html = `<table><tr><th>YOUR TEAM</th><th>Pops</th><th>Outs</th><th></th></tr>${rows(me.team)}</table>
@@ -267,7 +274,7 @@ const HUD = {
       this.el.ammo.textContent = '✿';
       this.el.reserve.textContent = '1';
       this.el.weaponName.textContent = 'The seed';
-      this.el.ammoLabel.innerHTML = keysToHtml('Hold [E] or [Click] on A or B');
+      this.el.ammoLabel.innerHTML = keysToHtml('Hold [4] on A or B to plant');
     } else if (me.slot === 'knife') {
       this.el.ammo.textContent = '∞';
       this.el.reserve.textContent = '';
@@ -368,15 +375,32 @@ const HUD = {
       if (e === me || !e.alive) continue;
       const enemy = e.team !== me.team && e.team !== 'buddy';
       if (enemy && e.spottedUntil < time) continue;
-      ctx.fillStyle = e.team === 'buddy' ? '#ff6f9f' : TEAM_CSS[e.team];
+      // teammates show in their own player colour (the flower on their hat); enemies in team red
+      ctx.fillStyle = e.team === 'buddy' ? '#ff6f9f' : !enemy && e.color !== undefined ? cssHex(e.color) : TEAM_CSS[e.team];
       ctx.strokeStyle = '#10141a'; ctx.lineWidth = s * 0.4;
       ctx.beginPath();
       ctx.arc(e.pos.x * s, e.pos.z * s, s * (enemy ? 1.7 : 1.4), 0, Math.PI * 2);
       ctx.fill(); ctx.stroke();
     }
 
-    // the seed: a green diamond (pulses once planted)
-    if (boo) {
+    // whoever carries the seed: a big green seed badge stuck to their dot
+    const seedBadge = (x, z) => {
+      const bx = x + s * 4.6, bz = z - s * 4.6, r = s * 5.4;
+      ctx.strokeStyle = '#10141a'; ctx.lineWidth = s * 0.6;
+      ctx.beginPath(); ctx.moveTo(x, z); ctx.lineTo(bx, bz); ctx.stroke();      // little stick to the dot
+      ctx.fillStyle = '#4fd16a';
+      ctx.beginPath(); ctx.arc(bx, bz, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#8b5a2b';                                               // the seed pod
+      ctx.beginPath(); ctx.ellipse(bx, bz + r * 0.18, r * 0.5, r * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#7fffd4';                                               // glowing band
+      ctx.fillRect(bx - r * 0.5, bz + r * 0.1, r, r * 0.18);
+      ctx.fillStyle = '#d8ffb0';                                               // sprout (light, on the green badge)
+      ctx.beginPath(); ctx.ellipse(bx + r * 0.22, bz - r * 0.55, r * 0.28, r * 0.15, -0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(bx - r * 0.18, bz - r * 0.5, r * 0.24, r * 0.13, 0.6, 0, Math.PI * 2); ctx.fill();
+    };
+    if (boo && boo.carried) {
+      seedBadge(boo.x * s, boo.z * s);
+    } else if (boo) {
       const r = s * (boo.planted ? 2.4 + Math.sin(time * 8) * 0.5 : 1.8);
       ctx.fillStyle = boo.planted ? '#7fffd4' : '#5fbf4a';
       ctx.strokeStyle = '#10141a'; ctx.lineWidth = s * 0.5;
@@ -389,6 +413,7 @@ const HUD = {
       ctx.fill(); ctx.stroke();
     }
     if (!me.alive) return;
+    if (me.carrying) seedBadge(me.pos.x * s, me.pos.z * s);
 
     // you: view cone + big white arrow
     const px = me.pos.x * s, pz = me.pos.z * s;
@@ -402,7 +427,7 @@ const HUD = {
     ctx.save();
     ctx.translate(px, pz);
     ctx.rotate(ang);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = me.color !== undefined ? cssHex(me.color) : '#ffffff';     // you, in your player colour
     ctx.strokeStyle = '#10141a'; ctx.lineWidth = s * 0.45;
     ctx.beginPath();
     ctx.moveTo(s * 3, 0);

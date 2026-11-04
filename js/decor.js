@@ -14,6 +14,14 @@ function buildDecor(scene, list) {
     stem: lam(0x4caf50),
     petals: [0xff6f91, 0xffd23f, 0xc77dff, 0xff9e5e, 0xffffff, 0xff4f6d].map(c => lam(c)),
     tower: lam(0x8c7258, { fog: false, emissive: 0x2a2a30 }),
+    orange: lam(0xff9a2e, { emissive: 0x402000 }),
+    white: lam(0xffffff),
+    coral: lam(0xff6f61),
+    blue: lam(0x3f8fd8),
+    sea: lam(0x3f9fd0, { emissive: 0x0c3048 }),
+    spire: lam(0xcdb48c, { fog: false, emissive: 0x3a3428 }),
+    spireDark: lam(0x6e5e48, { fog: false, emissive: 0x1a160f }),
+    spireTop: lam(0xf2c84b, { fog: false, emissive: 0x5a4410 }),
   };
   const add = (geo, mat, x, y, z, parent = root, shadow = true) => {
     const m = new THREE.Mesh(geo, mat);
@@ -81,6 +89,60 @@ function buildDecor(scene, list) {
               add(new THREE.BoxGeometry(0.03, h, 0.03), M.stem, fx, d.y + h / 2, fz, root, false);
               add(new THREE.IcosahedronGeometry(0.08 + rng() * 0.04, 0), M.petals[Math.floor(rng() * M.petals.length)], fx, d.y + h, fz, root, false);
             }
+        break;
+      }
+      case 'orange': {
+        // a small round orange tree crown, dotted with oranges
+        for (let i = 0; i < 3; i++) {
+          const r = 0.9 + rng() * 0.35, a = rng() * Math.PI * 2, off = i === 0 ? 0 : 0.6;
+          add(new THREE.IcosahedronGeometry(r, 1), M.leaves[i % 3], d.x + Math.cos(a) * off, d.y + 1.1 + rng() * 0.4, d.z + Math.sin(a) * off);
+        }
+        for (let i = 0; i < 9; i++) {
+          const a = rng() * Math.PI * 2, e = (rng() - 0.3) * 1.2, r = 1.05 + rng() * 0.15;
+          add(new THREE.SphereGeometry(0.11, 8, 6), M.orange, d.x + Math.cos(a) * r * Math.cos(e), d.y + 1.3 + Math.sin(e) * r, d.z + Math.sin(a) * r * Math.cos(e), root, false);
+        }
+        break;
+      }
+      case 'umbrella': {
+        // a striped beach umbrella
+        add(new THREE.CylinderGeometry(0.04, 0.04, 2.3, 8), M.iron, d.x, d.y + 1.15, d.z);
+        const n = 8;
+        for (let i = 0; i < n; i++) {
+          const seg = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.5, n, 1, true, (i / n) * Math.PI * 2, (Math.PI * 2) / n), i % 2 ? M.white : (d.color === 'blue' ? M.blue : M.coral));
+          seg.position.set(d.x, d.y + 2.35, d.z);
+          seg.material.side = THREE.DoubleSide;
+          seg.castShadow = true;
+          root.add(seg);
+        }
+        break;
+      }
+      case 'sea': {
+        // the sea, stretching away to the horizon
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(d.w, d.d), M.sea);
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(d.x, d.y, d.z);
+        root.add(m);
+        break;
+      }
+      case 'spires': {
+        // a far-away basilica bristling with tall spires (never fogged out)
+        const t = new THREE.Group();
+        t.position.set(d.x, d.y, d.z);
+        const spire = (x, z, h, r) => {
+          add(new THREE.CylinderGeometry(r * 0.55, r, h * 0.78, 10), M.spire, x, h * 0.39, z, t, false);
+          add(new THREE.ConeGeometry(r * 0.6, h * 0.22, 10), M.spire, x, h * 0.89, z, t, false);
+          add(new THREE.SphereGeometry(r * 0.32, 10, 8), M.spireTop, x, h + r * 0.1, z, t, false);
+          // little windows up the side
+          for (let k = 1; k < 6; k++) add(new THREE.BoxGeometry(r * 0.25, r * 0.6, r * 2.05), M.spireDark, x, h * 0.12 * k, z, t, false);
+        };
+        add(new THREE.BoxGeometry(46, 34, 26), M.spire, 0, 17, 0, t, false);             // the nave
+        add(new THREE.BoxGeometry(26, 44, 40), M.spire, 0, 22, 0, t, false);             // the crossing
+        for (const s of [-1, 1]) {
+          for (const [x, h] of [[-9, 96], [-3, 108], [3, 108], [9, 96]]) spire(x, s * 18, h, 3.2);
+        }
+        spire(0, 0, 160, 6);                                                              // the tallest one in the middle
+        for (const [x, z] of [[-14, -6], [14, -6], [-14, 6], [14, 6]]) spire(x, z, 118, 4);
+        root.add(t);
         break;
       }
       case 'tower': {

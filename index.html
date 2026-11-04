@@ -54,6 +54,7 @@
       <div></div><div></div><div></div><div></div>
     </div>
     <div id="dmgText"></div>
+    <div id="headStar">✦</div>
     <div id="drawBar"><div id="drawFill"></div></div>
 
     <div id="action"><div id="actionLabel"></div><div class="bar"><div id="actionFill"></div></div></div>
@@ -105,8 +106,8 @@
         <h3>How to play</h3>
         <ul>
           <li>You're a fluffy dog on the <b style="color:#5aa8ff">blue team</b>. Pop the <b style="color:#ff5a5a">red team</b> of cats with bubbles!</li>
-          <li><b>Attacking:</b> carry the seed to site <b>A</b> or <b>B</b> and hold <kbd>E</kbd> to plant it.</li>
-          <li><b>Defending:</b> stop them, or hold <kbd>E</kbd> next to their tree to uproot it.</li>
+          <li><b>Attacking:</b> carry the seed to site <b>A</b> or <b>B</b> and hold <kbd>4</kbd> to plant it.</li>
+          <li><b>Defending:</b> stop them, or hold <kbd>4</kbd> next to their tree to uproot it.</li>
           <li>Win rounds to earn doggy bank notes, then press <kbd>B</kbd> at the start of a round to shop.</li>
           <li>First team to <b>13 rounds</b> wins (<b>5</b> in Swiftplay). Follow the floating labels if you're lost!</li>
         </ul>
@@ -114,6 +115,7 @@
 
       <div class="pickLabel">MAP</div>
       <div class="pick" data-param="map">
+        <button data-value="barcelona">Barcelona</button>
         <button data-value="oasis">Oasis</button>
         <button data-value="paris">Petit Paris</button>
         <button data-value="garden">Practice Garden</button>
@@ -148,13 +150,13 @@
         <div><kbd>Shift</kbd> walk quietly</div>
         <div><kbd>C</kbd> crouch</div>
         <div><kbd>R</kbd> refill bubbles</div>
-        <div><kbd>E</kbd> hold to plant / uproot</div>
         <div><kbd>B</kbd> shop</div>
         <div><kbd>1</kbd> main blaster · <kbd>2</kbd> sidearm</div>
-        <div><kbd>3</kbd> knife · <kbd>4</kbd> the seed</div>
+        <div><kbd>3</kbd> knife · <kbd>4</kbd> the seed (hold to plant / uproot)</div>
         <div><kbd>5</kbd> grenades (press again to switch)</div>
         <div><kbd>Q</kbd> swap main / sidearm</div>
-        <div><kbd>F</kbd> swap for a blaster on the ground</div>
+        <div><kbd>F</kbd> pick up / swap a blaster on the ground</div>
+        <div><kbd>Y</kbd> inspect your blaster</div>
         <div><kbd>M</kbd> music on / off</div>
         <div><kbd>Tab</kbd> scoreboard</div>
         <div><kbd>Esc</kbd> pause</div>
@@ -184,6 +186,7 @@
   <script src="js/sassy.js"></script>
   <script src="js/plantanim.js"></script>
   <script src="js/chainsaw.js"></script>
+  <script src="js/nature.js"></script>
   <script src="js/music.js"></script>
   <script src="js/icons.js"></script>
   <script src="js/hud.js"></script>

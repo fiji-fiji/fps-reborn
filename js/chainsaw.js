@@ -1,6 +1,7 @@
-// Uprooting the tree, the loud way: whoever uproots pulls the cord on a big pink
-// chainsaw (put-put-put… VRRRRRM) and cuts through the trunk while wood chips fly.
-// It's LOUD on purpose: everyone on the map can hear someone is cutting the tree down.
+// Uprooting the tree: whoever uproots pulls the cord on a big pink chainsaw and cuts
+// through the trunk while wood chips fly. The joke is the sound: instead of a roar, the
+// saw makes a tiny squeaky fart when it starts, then little pffts while it cuts.
+// The whole show plays in the world, so everyone who can see the tree sees it.
 // When it's through, the tree tips over (TIMBER!) and shrinks away.
 
 class ChainsawAnim {
@@ -38,7 +39,7 @@ class ChainsawAnim {
     this.cord = add(this.saw, 0.008, 0.008, 1, lam(0xffffff), 0.11, 0.02, 0.2);   // pull cord (only when starting)
     this.cord.geometry.translate(0, 0, 0.5);
 
-    // two paws: one on the rear handle, one on the front loop
+    // two hands: one on the rear handle, one on the front loop
     this.pawBack = makePaw({ shadow: true });
     this.pawFront = makePaw({ shadow: true });
     this.pawBack.scale.setScalar(0.85);
@@ -66,11 +67,14 @@ class ChainsawAnim {
   start(e, treePos) {
     this.group.position.copy(treePos);
     this.group.rotation.y = Math.atan2(e.pos.x - treePos.x, e.pos.z - treePos.z);
+    // the saw starts a little closer to whoever's holding it when they stand far back
+    this.reachZ = Math.max(0, Math.min(0.3, Math.hypot(e.pos.x - treePos.x, e.pos.z - treePos.z) - 1.3));
     this.group.visible = true;
     this.active = true;
     this.who = e;
     this.lastP = 0;
     this.time = 0;
+    this.nextPuff = Infinity;
     const c = pawColors(e);
     for (const p of [this.pawBack, this.pawFront]) { p.setFur(c.fur); p.setSleeve(c.sleeve); }
     for (const ch of this.chips) { ch.life = 0; ch.m.visible = false; }
@@ -84,7 +88,6 @@ class ChainsawAnim {
     if (!this.active) return;
     this.active = false;
     this.group.visible = false;
-    Sound.chainsaw(0);
   }
 
   finish() { this.cancel(); }
@@ -109,20 +112,19 @@ class ChainsawAnim {
     this.time += dt;
     const crossed = at => lastP < at && p >= at;
     const vol = this.game._volumeAt(this.group.position);
-    const loud = 0.35 + 0.65 * vol;                    // you hear it from anywhere on the map
+    const soft = 0.08 + 0.92 * vol;                    // discreet: you hear it properly only nearby
 
     // 1) pull the cord: put… put… VRRRM
     const started = p >= 0.07;
     const pulls = [0.005, 0.035, 0.065];
     let yank = 0;
     for (const at of pulls) { const k = (p - at) / 0.02; if (k > 0 && k < 1) yank = Math.sin(k * Math.PI); }
-    for (const at of pulls) if (crossed(at)) Sound.pullCord(loud);
     // 2) cut: the bar goes into the trunk
     const cut = span(p, 0.1, 0.97);
     const buzz = started ? 0.006 : 0;
     const shakeX = Math.sin(this.time * 90) * buzz, shakeY = Math.cos(this.time * 77) * buzz;
     const barTip = 0.14 + 0.06 - cut * 0.32;              // tip of the bar: just touching the bark … all the way through
-    this.saw.position.set(shakeX, this.cutY + shakeY, (started ? barTip + 0.57 : 0.95) + yank * 0.04);
+    this.saw.position.set(shakeX, this.cutY + shakeY, (started ? barTip + 0.57 : 0.95 + (this.reachZ || 0)) + yank * 0.04);
     this.saw.rotation.set(started ? 0 : -0.15, 0, 0);
     // the chain runs round the bar
     const run = this.time * (started ? 6 : 0);
@@ -162,7 +164,12 @@ class ChainsawAnim {
     const tree = this.game.mode.boo && this.game.mode.boo.tree;
     if (tree) tree.rotation.z = started ? Math.sin(this.time * 47) * 0.012 * (0.3 + cut) : 0;
 
-    // engine: idles while starting, screams while cutting
-    if (started) Sound.chainsaw(loud, cut > 0 ? 1 : 0.3);
+    // sound: one long squeaky fart as it starts… then short little ones while it cuts
+    const at = this.group.position.clone().setY(this.group.position.y + this.cutY);
+    if (crossed(0.07)) { Sound.at(at, 'fart', soft, 'long'); this.nextPuff = this.time + 1.3; }
+    if (started && cut > 0 && cut < 1 && this.time >= this.nextPuff) {
+      Sound.at(at, 'fart', soft * 0.8, 'short');
+      this.nextPuff = this.time + 0.45 + Math.random() * 0.6;
+    }
   }
 }

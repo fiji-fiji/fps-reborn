@@ -63,7 +63,7 @@ class Throwables {
     this.game.scene.add(mesh);
     this.list.push({ owner, kind, pos: pos.clone(), vel: vel.clone(), fuse: GRENADES[kind].fuse, mesh,
       spin: new THREE.Vector3(Math.random() * 8, Math.random() * 8, 0) });
-    Sound.toss(this.game._volumeAt(pos));
+    Sound.at(pos, 'toss', this.game._volumeAt(pos));
   }
 
   update(dt) {
@@ -75,16 +75,16 @@ class Throwables {
       const r = 0.12;
       n.vel.y -= NADE_GRAVITY * dt;
       const nx = n.pos.x + n.vel.x * dt;
-      if (w.solidTopAt(nx + Math.sign(n.vel.x) * r, n.pos.y, n.pos.z) !== null) { n.vel.x *= -0.45; Sound.tick(this.game._volumeAt(n.pos)); }
+      if (w.solidTopAt(nx + Math.sign(n.vel.x) * r, n.pos.y, n.pos.z) !== null) { n.vel.x *= -0.45; Sound.at(n.pos, 'tick', this.game._volumeAt(n.pos)); }
       else n.pos.x = nx;
       const nz = n.pos.z + n.vel.z * dt;
-      if (w.solidTopAt(n.pos.x, n.pos.y, nz + Math.sign(n.vel.z) * r) !== null) { n.vel.z *= -0.45; Sound.tick(this.game._volumeAt(n.pos)); }
+      if (w.solidTopAt(n.pos.x, n.pos.y, nz + Math.sign(n.vel.z) * r) !== null) { n.vel.z *= -0.45; Sound.at(n.pos, 'tick', this.game._volumeAt(n.pos)); }
       else n.pos.z = nz;
       const ny = n.pos.y + n.vel.y * dt;
       const floor = n.vel.y <= 0 ? w.solidTopAt(n.pos.x, ny - r, n.pos.z) : null;
       if (floor !== null) {
         n.pos.y = floor + r;
-        if (Math.abs(n.vel.y) > 2) Sound.tick(this.game._volumeAt(n.pos));
+        if (Math.abs(n.vel.y) > 2) Sound.at(n.pos, 'tick', this.game._volumeAt(n.pos));
         n.vel.y = Math.abs(n.vel.y) > 1.5 ? -n.vel.y * 0.4 : 0;
         const k = Math.exp(-dt * 5);
         n.vel.x *= k; n.vel.z *= k;                    // rolls to a stop
@@ -157,7 +157,7 @@ class Throwables {
     this.game.scene.add(group);
     this.smokes.push({ center, group, puffs, t: 0, density: 0 });
     this.game.effects.bubbleBurst(center, new THREE.Vector3(0, 1, 0), 12, 2, 0.12);
-    Sound.puff(this.game._volumeAt(center));
+    Sound.at(center, 'puff', this.game._volumeAt(center));
   }
 
   _flash(n) {
@@ -165,7 +165,7 @@ class Throwables {
     p.y += 0.3;
     g.effects.confettiBurst(p, 70, 7);
     g.effects.bubbleBurst(p, new THREE.Vector3(0, 1, 0), 16, 3, 0.1);
-    Sound.sparkle(g._volumeAt(p));
+    Sound.at(p, 'sparkle', g._volumeAt(p));
     const eye = new THREE.Vector3();
     for (const e of g.entities) {
       if (!e.alive || !e.mover || e.team === n.owner.team) continue;    // only enemies get dazzled
@@ -196,7 +196,7 @@ class Throwables {
     shock.position.copy(p);
     g.scene.add(shock);
     this.temp.push({ mesh: shock, t: 0, life: 0.45, size: FRAG.radius });
-    Sound.boom(g._volumeAt(p));
+    Sound.at(p, 'boom', g._volumeAt(p));
     const chest = new THREE.Vector3();
     for (const e of g.entities) {
       if (!e.alive || e === n.owner || e.team === n.owner.team) continue;   // never hurts you or your team

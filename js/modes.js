@@ -16,6 +16,7 @@ const ROUND = {
   half: 12,         // sides swap after 12 rounds (and every round in overtime)
 };
 // Swiftplay: a short match. First to 5, sides swap after round 4; at 4-4 round 9 decides it.
+const closeRangeGun = bot => !!(bot.gun && (bot.gun.def.key === 'sunflower' || bot.gun.def.key === 'tulip'));
 const SWIFTPLAY = { name: 'Swiftplay', toWin: 5, half: 4, winByTwo: false };
 const ECON = { start: 800, win: 3000, loss: [1900, 2400, 2900], pop: 200, plant: 300 };
 
@@ -252,7 +253,7 @@ class StandardMode {
         this.timeLeft = Math.max(0, this.timeLeft - dt);
         b.progress = 1 - this.timeLeft / BOOBOO.fuse;
         this.beat -= dt;
-        if (this.beat <= 0) { this.beat = b.beatInterval(); Sound.drip(g._volumeAt(b.pos)); }
+        if (this.beat <= 0) { this.beat = b.beatInterval(); Sound.at(b.pos, 'drip', g._volumeAt(b.pos)); }
         this._uprooting(dt);
         if (this.phase !== 'planted') break;
         if (this.timeLeft === 0) { this._bloom(); break; }
@@ -377,13 +378,13 @@ class StandardMode {
       if (e === this.defuser) break;
     }
     if (d && d === this.defuser) this.defuseProgress += dt;
-    else if (d) { this.defuser = d; this.defuseProgress = dt; this.saw.start(d, b.pos); }   // pull the cord…
-    else { this.defuser = null; this.defuseProgress = 0; this.saw.cancel(); }
+    else if (d) { this.defuser = d; this.defuseProgress = dt; this.saw.start(d, b.pos); this.version++; }   // pull the cord… (everyone hears it)
+    else { if (this.defuser) this.version++; this.defuser = null; this.defuseProgress = 0; this.saw.cancel(); }
     if (this.defuser) this.saw.update(Math.min(1, this.defuseProgress / BOOBOO.uprootTime), dt);
     if (this.defuseProgress >= BOOBOO.uprootTime) {
       b.uproot(this.saw.fallYaw);                  // TIMBER!
       this.saw.finish();
-      Sound.timber(0.4 + 0.6 * this.game._volumeAt(b.pos));
+      Sound.at(b.pos, 'timber', 0.4 + 0.6 * this.game._volumeAt(b.pos));
       this.endRound(this.defendTeam, 'The tree was cut down!');
     }
   }
@@ -442,6 +443,32 @@ class StandardMode {
   // Before GO you can walk around, but only inside your own spawn area.
   spawnFence(e) { return this.phase === 'prep' ? this.game.mapInfo.spawns[this.sideOf(e.team)] : null; }
 
+  // Bots that must drop everything and go: defenders when the tree has to be cut now.
+  botMustRush(bot) {
+    if (this.phase !== 'planted' || this.sideOf(bot.team) !== 'defend') return false;
+    return !this.members(this.attackTeam).some(e => e.alive) || this.timeLeft < 22;
+  }
+
+  // A walkable cell right next to the tree (the tree's own cell can be in a weird spot,
+  // e.g. against a wall or on a ledge), within uprooting reach.
+  _uprootSpot() {
+    const b = this.boo, nav = this.game.nav;
+    if (this._uprootCellFor === b.pos.x + ',' + b.pos.z) return this._uprootCell;
+    let best = null, bestD = Infinity;
+    const cx = Math.floor(b.pos.x), cz = Math.floor(b.pos.z);
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+      const x = cx + dx, z = cz + dz;
+      if (!nav.walkable(x, z)) continue;
+      const fy = nav.floorAt(x, z);
+      const d = Math.hypot(x + 0.5 - b.pos.x, z + 0.5 - b.pos.z);
+      if (d > BOOBOO.uprootReach - 0.2 || Math.abs(fy - b.pos.y) > 1.2) continue;
+      if (d < bestD) { bestD = d; best = [x, z]; }
+    }
+    this._uprootCellFor = b.pos.x + ',' + b.pos.z;
+    this._uprootCell = best || nav.nearest(cx, cz, 3);
+    return this._uprootCell;
+  }
+
   // ---------------- what bots should do ----------------
   botGoal(bot) {
     if (this.phase !== 'live' && this.phase !== 'planted') return null;
@@ -450,10 +477,12 @@ class StandardMode {
     const goalAt = (c, extra) => (c ? Object.assign({ x: c[0] + 0.5, z: c[1] + 0.5 }, extra) : null);
 
     if (side === 'attack') {
+      // you can HEAR the chainsaw: someone's cutting our tree down, go stop them!
+      if (b.state === 'planted' && this.defuser) return goalAt(near(b.pos.x, b.pos.z, 2), { hold: 1, lookAt: [b.pos.x, b.pos.z], rush: true });
       if (b.state === 'planted') {
         const watch = pick(this.sites[this.plantedSite].entrances);
         const around = { x0: Math.floor(b.pos.x - 8), z0: Math.floor(b.pos.z - 8), x1: Math.floor(b.pos.x + 8), z1: Math.floor(b.pos.z + 8) };
-        return goalAt(this.game.findHoldSpot(around, watch) || near(b.pos.x, b.pos.z, 7), { hold: 5 + Math.random() * 5, lookAt: watch });
+        return goalAt(this.game.findHoldSpot(around, watch, closeRangeGun(bot)) || near(b.pos.x, b.pos.z, 7), { hold: 5 + Math.random() * 5, lookAt: watch });
       }
       if (b.state === 'dropped' && this.botsMayTake) {
         const bots = this.members(this.attackTeam).filter(e => e.alive && !e.isPlayer);
@@ -479,14 +508,19 @@ class StandardMode {
       return goalAt(nav.randomIn(site), { hold: 2 + Math.random() * 4, lookAt: pick(site.entrances) });
     }
 
-    // defending
+    // defending: a planted tree ALWAYS gets cut down if a bot can get to it
     if (b.state === 'planted') {
+      const attackersLeft = this.members(this.attackTeam).some(e => e.alive);
       if (!this.uprooter || !this.uprooter.alive) {
         const bots = this.members(this.defendTeam).filter(e => e.alive && !e.isPlayer);
         this.uprooter = bots.sort((p, q) => flatDist(p.pos, b.pos) - flatDist(q.pos, b.pos))[0] || null;
       }
-      if (bot === this.uprooter) return { x: b.pos.x, z: b.pos.z, action: 'uproot' };
-      return goalAt(near(b.pos.x, b.pos.z, 6), { hold: 2 + Math.random() * 3, lookAt: [b.pos.x, b.pos.z] });
+      const spot = this._uprootSpot();
+      // nobody left to stop us (or no time left to be careful): run straight there
+      const rush = !attackersLeft || this.timeLeft < 22;
+      if (bot === this.uprooter && spot) return goalAt(spot, { action: 'uproot', rush });
+      if (!attackersLeft) return goalAt(near(b.pos.x, b.pos.z, 3), { hold: 1, lookAt: [b.pos.x, b.pos.z], rush: true });
+      return goalAt(near(b.pos.x, b.pos.z, 6), { hold: 2 + Math.random() * 3, lookAt: [b.pos.x, b.pos.z], rush });
     }
     let post = this.posts.get(bot) || 'mid';
     if (this.alertSite && this.game.time < this.alertUntil) post = this.alertSite;
@@ -496,21 +530,21 @@ class StandardMode {
     }
     const s = this.sites[post];
     const watch = pick(s.entrances.slice(0, 2));
-    return goalAt(this.game.findHoldSpot(s, watch) || nav.randomIn(s), { hold: 6 + Math.random() * 6, lookAt: watch });
+    return goalAt(this.game.findHoldSpot(s, watch, closeRangeGun(bot)) || nav.randomIn(s), { hold: 6 + Math.random() * 6, lookAt: watch });
   }
 
-  // ---------------- for the HUD (plain words; [E] shows as a key) ----------------
+  // ---------------- for the HUD (plain words; [4] shows as a key) ----------------
   hintFor(me) {
     if (this.phase === 'over') return 'Press [Enter] to play another match';
     if (this.phase === 'prep') return this.round === 1
       ? `Get ready! The round starts in ${Math.ceil(this.timeLeft)}`
       : `Shopping time! Press [B] to buy · starts in ${Math.ceil(this.timeLeft)}`;
     const b = this.boo;
-    if (me.alive && this.planter === me) return 'Planting… keep holding [E]';
-    if (me.alive && this.phase === 'end' && me.carrying && this.siteAt(me.pos)) return "Round's over, but you can still plant it! Hold [E]";
+    if (me.alive && this.planter === me) return 'Planting… keep holding [4]';
+    if (me.alive && this.phase === 'end' && me.carrying && this.siteAt(me.pos)) return "Round's over, but you can still plant it! Hold [4]";
     if (!me.alive || this.phase === 'end') return '';
     if (this.sideOf(me.team) === 'attack') {
-      if (me.carrying) return this.siteAt(me.pos) ? 'Hold [E] to plant the seed here' : 'You have the seed! Bring it to A or B';
+      if (me.carrying) return this.siteAt(me.pos) ? 'Hold [4] to plant the seed here' : 'You have the seed! Bring it to A or B';
       if (b.state === 'dropped') return this.seedForMe && !me.hadSeed
         ? 'Your seed is on the ground. Walk over it to pick it up!'
         : 'The seed was dropped. Walk over it to pick it up!';
@@ -518,7 +552,7 @@ class StandardMode {
       return `Go with your team to site ${this.planSite}`;
     }
     if (b.state === 'planted') {
-      return flatDist(me.pos, b.pos) <= BOOBOO.uprootReach ? 'Hold [E] to chainsaw the tree down' : `The seed is planted on ${this.plantedSite}! Go uproot it`;
+      return flatDist(me.pos, b.pos) <= BOOBOO.uprootReach ? 'Hold [4] to chainsaw the tree down' : `The seed is planted on ${this.plantedSite}! Go uproot it`;
     }
     return 'Guard sites A and B. Stop the enemy planting!';
   }
@@ -547,9 +581,13 @@ class StandardMode {
   booMarker(team) {
     const b = this.boo;
     if (b.state === 'planted') return { x: b.pos.x, z: b.pos.z, planted: true };
-    if (this.sideOf(team) !== 'attack') return null;
+    const c = b.state === 'carried' && b.carrier && b.carrier.alive ? b.carrier : null;
+    if (this.sideOf(team) !== 'attack') {
+      // defenders only see who has it when that attacker is spotted
+      return c && c.spottedUntil > this.game.time ? { x: c.pos.x, z: c.pos.z, carried: true, carrier: c } : null;
+    }
     if (b.state === 'dropped') return { x: b.pos.x, z: b.pos.z };
-    if (b.state === 'carried' && b.carrier && !b.carrier.isPlayer) return { x: b.carrier.pos.x, z: b.carrier.pos.z, carried: true };
+    if (c) return { x: c.pos.x, z: c.pos.z, carried: true, carrier: c };
     return null;
   }
 

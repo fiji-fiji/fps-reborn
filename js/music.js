@@ -36,7 +36,7 @@ const Music = (() => {
   const noteFreq = n => { const m = n.match(/^([A-G]#?)(\d)$/); return freq(m[1], +m[2]); };
 
   let ctx = null, out = null, pulse = null, noiseBuf = null;
-  let volume = 0.5, enabled = true, playing = false;
+  let volume = 0.5, enabled = false, playing = false;   // off until you press M
   let nextBar = 0, barTime = 0, timer = null;
 
   function setup() {

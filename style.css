@@ -180,6 +180,17 @@ kbd {
 #hitmarker.head div { background: var(--gold); }
 #hitmarker.kill div { background: var(--pink); }
 
+#headStar {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -52%) scale(0);
+  font-size: 4.2rem; color: #ffd23f; opacity: 0; pointer-events: none;
+  text-shadow: 0 0 .25rem #fff, 0 .15rem 0 rgba(0,0,0,.45);
+}
+#headStar.pop { animation: headStar .5s ease-out; }
+@keyframes headStar {
+  0% { opacity: 1; transform: translate(-50%, -52%) scale(.3) rotate(0deg); }
+  35% { opacity: 1; transform: translate(-50%, -52%) scale(1.15) rotate(20deg); }
+  100% { opacity: 0; transform: translate(-50%, -52%) scale(1.5) rotate(45deg); }
+}
 #dmgText {
   position: absolute; left: 50%; top: calc(50% + 1.8rem);
   transform: translateX(-50%);
@@ -378,3 +389,6 @@ body.shopping #hud { display: none; }
 .wicon.money { filter: drop-shadow(0 .06rem 0 rgba(0,0,0,.6)); vertical-align: -0.12em; }
 .wicon { image-rendering: pixelated; vertical-align: middle; filter: drop-shadow(0 .08rem 0 rgba(0,0,0,.7)); }
 .headIcon { color: var(--gold); margin-left: .3rem; }
+
+/* scoreboard: each player's own colour (same as the flower on their hat) */
+.pdot { display: inline-block; width: 0.7em; height: 0.7em; border-radius: 50%; margin-right: 0.45em; vertical-align: 0.05em; box-shadow: 0 0 0 2px rgba(0,0,0,.35); }

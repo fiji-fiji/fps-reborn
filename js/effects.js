@@ -31,7 +31,7 @@ class Effects {
     this.bMesh = new THREE.InstancedMesh(
       new THREE.SphereGeometry(1, 8, 6),
       new THREE.MeshLambertMaterial({
-        color: 0xd8f6ff, emissive: 0x3a6a88, transparent: true, opacity: 0.55, depthWrite: false,
+        color: 0xd8f6ff, emissive: 0x3a6a88, transparent: true, opacity: 0.45, depthWrite: false,
       }),
       this.maxBubbles);
     this.bMesh.frustumCulled = false;
@@ -77,6 +77,12 @@ class Effects {
   }
 
   bubble(pos, vel, size, life) {
+    // keep your screen clear: no bubbles right in your face, smaller ones close by
+    if (this.viewer) {
+      const d = pos.distanceTo(this.viewer);
+      if (d < 1.4) return;
+      if (d < 3.5) size *= 0.4 + 0.6 * (d - 1.4) / 2.1;
+    }
     const b = this.bubbles[this.bNext];
     this.bNext = (this.bNext + 1) % this.maxBubbles;
     b.pos.copy(pos);
@@ -88,7 +94,7 @@ class Effects {
   // A stream of bubbles from the flower to where the shot landed.
   bubbleTrail(from, to) {
     const dist = from.distanceTo(to);
-    const n = Math.min(22, Math.max(3, Math.floor(dist / 0.9)));
+    const n = Math.min(10, Math.max(2, Math.floor(dist / 1.8)));   // a light trail, not a wall of bubbles
     const p = new THREE.Vector3(), v = new THREE.Vector3();
     const dir = to.clone().sub(from).normalize();
     for (let i = 0; i < n; i++) {
@@ -98,7 +104,7 @@ class Effects {
       p.y += (Math.random() - 0.5) * 0.08;
       p.z += (Math.random() - 0.5) * 0.08;
       v.copy(dir).multiplyScalar(1.2).add(this._rand(0.3));
-      this.bubble(p, v, 0.025 + Math.random() * 0.045, 0.35 + Math.random() * 0.5);
+      this.bubble(p, v, 0.02 + Math.random() * 0.03, 0.25 + Math.random() * 0.3);
     }
   }
 
@@ -226,9 +232,45 @@ class Effects {
     return this._tmpV.set(r(), r(), r());
   }
 
+  // Headshot: a big gold star pops on the head that got hit (everyone can see it).
+  starPop(point) {
+    if (!this.starTex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const g = c.getContext('2d');
+      g.translate(64, 64);
+      g.beginPath();
+      for (let i = 0; i < 8; i++) {                       // 4-point sparkle star
+        const r = i % 2 ? 16 : 60, a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+        g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      g.closePath();
+      g.fillStyle = '#ffd23f'; g.strokeStyle = '#ffffff'; g.lineWidth = 8;
+      g.stroke(); g.fill();
+      this.starTex = new THREE.CanvasTexture(c);
+      this.starTex.encoding = THREE.sRGBEncoding;
+      this.stars = [];
+    }
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.starTex, transparent: true, depthTest: false }));
+    s.position.copy(point).add(new THREE.Vector3(0, 0.25, 0));
+    s.renderOrder = 20;
+    this.scene.add(s);
+    this.stars.push({ s, life: 0.55 });
+  }
+
   update(dt, world) {
     const time = performance.now() / 1000;
     this._updatePixels(dt, world);
+    if (this.stars) for (let i = this.stars.length - 1; i >= 0; i--) {
+      const st = this.stars[i];
+      st.life -= dt;
+      const k = 1 - st.life / 0.55;
+      st.s.scale.setScalar(0.25 + Math.sin(Math.min(1, k * 2.5) * Math.PI * 0.5) * 0.45);
+      st.s.material.rotation = k * 1.5;
+      st.s.material.opacity = st.life < 0.2 ? st.life / 0.2 : 1;
+      st.s.position.y += dt * 0.5;
+      if (st.life <= 0) { this.scene.remove(st.s); st.s.material.dispose(); this.stars.splice(i, 1); }
+    }
 
     for (let i = 0; i < this.maxBubbles; i++) {
       const b = this.bubbles[i];

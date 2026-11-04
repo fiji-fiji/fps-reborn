@@ -1,7 +1,7 @@
 // Dropped blasters. When someone is popped, their main blaster falls on the ground
 // (with whatever bubbles were left in it). Anyone, on either team, can take it:
-//   - walk over it when you have no main blaster and it's yours automatically
-//   - stand next to it and press [F] to swap it for the one you're holding
+//   - you: stand next to it and press [F] to pick it up (or swap it for the one you hold)
+//   - bots: walk over it when they have no main blaster (or it's a pricier one)
 // Bots without a main blaster go and grab one if it's close. Everything on the
 // ground is cleared when a new round starts.
 
@@ -114,7 +114,7 @@ class Drops {
     if (!me.alive || !me.guns) return '';
     const it = this.nearest(me, DROP.swapReach);
     if (!it) return '';
-    return me.guns.main ? `Press [F] to swap for the ${it.gun.def.name}` : '';
+    return me.guns.main ? `Press [F] to swap for the ${it.gun.def.name}` : `Press [F] to pick up the ${it.gun.def.name}`;
   }
 
   markersFor(me) {
@@ -127,7 +127,7 @@ class Drops {
     return out;
   }
 
-  // [F] pressed: swap with the closest drop in reach.
+  // [F] pressed: pick up (or swap for) the closest drop in reach.
   trySwap(me) {
     const it = this.nearest(me, DROP.swapReach);
     if (it) this.take(me, it);
@@ -161,14 +161,15 @@ class Drops {
       it.group.position.copy(it.pos);
       if (g.mode.kind !== 'standard' && it.age > DROP.life) { this._remove(it); continue; }
 
-      // anyone with no main blaster who walks over it takes it; bots also trade up for a pricier one
+      // a bot with no main blaster who walks over it takes it (or trades up for a pricier one).
+      // You pick things up with [F] instead.
       if (!it.landed) continue;
       for (const e of g.entities) {
-        if (!e.alive || !e.guns || !e.mover || e.team === 'buddy') continue;
+        if (!e.alive || !e.guns || !e.mover || e.team === 'buddy' || e.isPlayer) continue;
         if (it.owner === e && it.ownerWait > 0) continue;
         if (Math.hypot(it.pos.x - e.pos.x, it.pos.z - e.pos.z) > DROP.reach || Math.abs(it.floor - e.pos.y) > 1.2) continue;
         const main = e.guns.main;
-        const wants = !main || (!e.isPlayer && it.gun.def.price > main.def.price);
+        const wants = !main || it.gun.def.price > main.def.price;
         if (wants) { this.take(e, it); break; }
       }
     }

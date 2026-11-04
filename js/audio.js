@@ -1,7 +1,14 @@
 // Tiny synthesized, cheerful sound effects (no audio files needed).
+//
+// Sounds in the world are 3D: Sound.at(pos, 'name', ...args) plays a sound from that spot.
+// It's placed in your ears with HRTF (the browser's model of how real ears hear direction,
+// including above/below and in front/behind), its loudness falls off with distance, and it's
+// muffled when there's a wall between you and it. Sound is information: listen!
 
 const Sound = (() => {
-  let ctx = null, master = null, noiseBuf = null, volume = 0.7, saw = null;
+  let ctx = null, master = null, noiseBuf = null, volume = 0.7, windNodes = null;
+  let out = null;                 // where tone()/noise() send their sound right now (null = straight to your ears)
+  let occluder = null;            // (pos) => true if a wall is between you and pos
 
   function init() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -23,7 +30,7 @@ const Sound = (() => {
     const t = ctx.currentTime + delay;
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.connect(f).connect(g).connect(master);
+    src.connect(f).connect(g).connect(out || master);
     src.start(t); src.stop(t + dur);
   }
 
@@ -37,16 +44,110 @@ const Sound = (() => {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.linearRampToValueAtTime(vol, t + 0.005);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g).connect(master);
+    o.connect(g).connect(out || master);
     o.start(t); o.stop(t + dur + 0.01);
   }
 
   const on = () => ctx !== null;
 
+  // A 3D voice at `pos`: (muffle if behind a wall) -> HRTF panner -> your ears.
+  // Loudness by distance is done by the callers (game._volumeAt), the panner only places it.
+  function spatial(pos) {
+    const p = ctx.createPanner();
+    p.panningModel = 'HRTF';
+    p.distanceModel = 'linear';
+    p.rolloffFactor = 0;
+    if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; }
+    else p.setPosition(pos.x, pos.y, pos.z);
+    p.connect(master);
+    let input = p;
+    if (occluder && occluder(pos)) {                     // through a wall: dull and quieter
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass'; f.frequency.value = 650;
+      const g = ctx.createGain(); g.gain.value = 0.55;
+      f.connect(g).connect(p);
+      input = f;
+    }
+    setTimeout(() => { try { p.disconnect(); } catch (e) {} }, 2500);   // let it be cleaned up
+    return { input, panner: p };
+  }
+
+  // which kind of ground a block is, for footsteps
+  function surfaceOf(name) {
+    if (!name) return 'stone';
+    if (/water/.test(name)) return 'water';
+    if (/grass|dirt|sand(?!stone)|clay/.test(name)) return 'soft';
+    if (/plank|crate|log|wood/.test(name)) return 'wood';
+    if (/zinc|metal/.test(name)) return 'metal';
+    return 'stone';
+  }
+
   return {
     init,
     setVolume(v) { volume = v; if (master) master.gain.value = v * 0.7; },
     context() { return ctx; },
+
+    // ---- 3D ----
+    // play Sound[name](...args) from world position `pos`
+    at(pos, name, ...args) {
+      if (!on() || !pos || !this[name]) return;
+      out = spatial(pos).input;
+      try { this[name](...args); } finally { out = null; }
+    },
+    // your ears: call every frame with the camera
+    listen(camera) {
+      if (!on()) return;
+      const L = ctx.listener, p = camera.position;
+      const f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      const u = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+      if (L.positionX) {
+        const t = ctx.currentTime;
+        L.positionX.setValueAtTime(p.x, t); L.positionY.setValueAtTime(p.y, t); L.positionZ.setValueAtTime(p.z, t);
+        L.forwardX.setValueAtTime(f.x, t); L.forwardY.setValueAtTime(f.y, t); L.forwardZ.setValueAtTime(f.z, t);
+        L.upX.setValueAtTime(u.x, t); L.upY.setValueAtTime(u.y, t); L.upZ.setValueAtTime(u.z, t);
+      } else {
+        L.setPosition(p.x, p.y, p.z);
+        L.setOrientation(f.x, f.y, f.z, u.x, u.y, u.z);
+      }
+    },
+    setOccluder(fn) { occluder = fn; },
+
+    // ---- nature ----
+    // very subtle wind (+ a faint rustle in the gusts). gust 0..1. Almost a noise floor, so steps stay clear.
+    wind(gust) {
+      if (!on()) return;
+      const t = ctx.currentTime;
+      if (!windNodes) {
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < d.length; i++) { last = last * 0.98 + (Math.random() * 2 - 1) * 0.2; d[i] = last; }   // soft (brownish) noise
+        const mk = () => { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; return s; };
+        const src = mk(), src2 = mk();
+        const low = ctx.createBiquadFilter(); low.type = 'bandpass'; low.frequency.value = 420; low.Q.value = 0.5;
+        const high = ctx.createBiquadFilter(); high.type = 'highpass'; high.frequency.value = 2800;
+        const g1 = ctx.createGain(), g2 = ctx.createGain();
+        g1.gain.value = 0; g2.gain.value = 0;
+        src.connect(low).connect(g1).connect(master);
+        src2.connect(high).connect(g2).connect(master);
+        src.start(); src2.start(t + 1.3);
+        windNodes = { low, g1, g2 };
+      }
+      // barely there: a soft noise floor that breathes with the gusts
+      windNodes.g1.gain.setTargetAtTime(0.007 + gust * 0.009, t, 0.8);
+      windNodes.low.frequency.setTargetAtTime(260 + gust * 140, t, 0.8);
+      windNodes.g2.gain.setTargetAtTime(gust * gust * 0.004, t, 0.6);    // a faint leaf rustle in the gusts
+    },
+    // a little bird: a few quick chirps
+    bird(vol = 1) {
+      if (!on()) return;
+      const n = 2 + Math.floor(Math.random() * 4), base = 2600 + Math.random() * 1500, up = Math.random() < 0.5;
+      for (let i = 0; i < n; i++) {
+        const f = base * (1 + (Math.random() - 0.5) * 0.15);
+        tone(f, 0.06 + Math.random() * 0.04, 0.05 * vol, 'sine', up ? f * 1.4 : f * 0.7, i * (0.09 + Math.random() * 0.05));
+      }
+    },
+    surfaceOf,
 
     // ---- sassy refills ----
     snap() { if (!on()) return; noise(0.04, 3500, 0.5, 'highpass'); tone(2400, 0.03, 0.15, 'square', 1800); },
@@ -69,38 +170,36 @@ const Sound = (() => {
     pour(vol = 1) { if (!on() || vol < 0.05) return; noise(0.05, 1800 + Math.random() * 800, 0.05 * vol, 'bandpass'); },
     sip(vol = 1) { if (!on() || vol < 0.05) return; noise(0.35, 1200, 0.18 * vol, 'bandpass'); tone(500, 0.3, 0.05 * vol, 'sine', 900); },
     spritz(vol = 1) { if (!on() || vol < 0.05) return; noise(0.18, 6000, 0.25 * vol, 'highpass'); },
-    // chainsaw: call every frame while sawing (vol 0 turns it off). rev 0..1 = idle..cutting
-    chainsaw(vol, rev = 1) {
-      if (!on()) return;
-      const t = ctx.currentTime;
-      if (vol <= 0) {
-        if (saw) {
-          const s = saw; saw = null;
-          s.g.gain.setTargetAtTime(0, t, 0.06);
-          setTimeout(() => { try { s.o1.stop(); s.o2.stop(); s.lfo.stop(); } catch (e) {} }, 400);
-        }
-        return;
-      }
-      if (!saw) {
-        const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), lfo = ctx.createOscillator();
-        const lfoGain = ctx.createGain(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-        o1.type = 'sawtooth'; o2.type = 'square'; lfo.type = 'sine';
-        o1.frequency.value = 90; o2.frequency.value = 181; lfo.frequency.value = 24;
-        lfoGain.gain.value = 14;
-        lfo.connect(lfoGain); lfoGain.connect(o1.frequency); lfoGain.connect(o2.frequency);
-        f.type = 'lowpass'; f.frequency.value = 1600;
-        g.gain.value = 0;
-        o1.connect(f); o2.connect(f); f.connect(g).connect(master);
-        o1.start(); o2.start(); lfo.start();
-        saw = { o1, o2, lfo, f, g };
-      }
-      saw.g.gain.setTargetAtTime(vol * (0.16 + rev * 0.12), t, 0.05);
-      saw.o1.frequency.setTargetAtTime(80 + rev * 55, t, 0.15);
-      saw.o2.frequency.setTargetAtTime(161 + rev * 110, t, 0.15);
-      saw.f.frequency.setTargetAtTime(1100 + rev * 1600, t, 0.15);
+    // the chainsaw's (silly) voice: a little fart. 'long' = a squeaky one that wobbles up
+    // and down in pitch; 'short' = a quick pfft. Small on purpose, next to that big saw.
+    fart(vol = 1, kind = 'short') {
+      if (!on() || vol < 0.02) return;
+      const t = ctx.currentTime, long = kind === 'long';
+      const dur = long ? 1.15 : 0.12 + Math.random() * 0.12;
+      const o = ctx.createOscillator(), lfo = ctx.createOscillator(), lfoG = ctx.createGain();
+      const f = ctx.createBiquadFilter(), g = ctx.createGain(), flutter = ctx.createGain();
+      o.type = 'sawtooth';
+      const base = long ? 300 : 210 + Math.random() * 90;
+      o.frequency.setValueAtTime(base, t);
+      if (long) {
+        o.frequency.linearRampToValueAtTime(470, t + 0.28);
+        o.frequency.linearRampToValueAtTime(230, t + 0.62);
+        o.frequency.linearRampToValueAtTime(390, t + 0.85);
+        o.frequency.exponentialRampToValueAtTime(140, t + dur);
+      } else o.frequency.exponentialRampToValueAtTime(base * 0.65, t + dur);
+      lfo.type = 'square'; lfo.frequency.value = long ? 26 : 32;       // the flappy flutter
+      lfoG.gain.value = 0.5;
+      flutter.gain.value = 0.5;
+      lfo.connect(lfoG).connect(flutter.gain);
+      f.type = 'lowpass'; f.frequency.value = long ? 1500 : 1100; f.Q.value = 4;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.16 * vol, t + 0.02);
+      g.gain.setValueAtTime(0.16 * vol, t + dur * 0.75);
+      g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(flutter).connect(f).connect(g).connect(out || master);
+      o.start(t); lfo.start(t); o.stop(t + dur + 0.02); lfo.stop(t + dur + 0.02);
+      noise(dur * 0.8, 500, 0.04 * vol, 'bandpass');                   // a breath of air
     },
-    // yanking the chainsaw's pull cord: zzzip, put-put
-    pullCord(vol = 1) { if (!on()) return; noise(0.12, 2200, 0.25 * vol, 'bandpass'); tone(70, 0.12, 0.3 * vol, 'sawtooth', 50, 0.1); tone(75, 0.08, 0.25 * vol, 'sawtooth', 55, 0.24); },
     timber(vol = 1) { if (!on()) return; tone(220, 0.6, 0.2 * vol, 'triangle', 90); noise(0.5, 400, 0.4 * vol, 'lowpass', 0.45); tone(60, 0.4, 0.45 * vol, 'sine', 30, 0.45); },
     sell() { if (!on()) return; tone(1400, 0.08, 0.15, 'triangle', 700); tone(900, 0.12, 0.12, 'triangle', 500, 0.07); },
     sprout() { if (!on()) return; tone(300, 0.25, 0.25, 'sine', 1200); },
@@ -121,8 +220,29 @@ const Sound = (() => {
       noise(0.5, 900, 0.35 * vol, 'lowpass');
       for (let i = 0; i < 6; i++) tone(400 + Math.random() * 600, 0.1, 0.1 * vol, 'sine', 1400, 0.05 + i * 0.04);
     },
-    // a soft footstep (running only)
-    step(vol = 1) { if (!on() || vol < 0.05) return; noise(0.06, 500 + Math.random() * 300, 0.18 * vol, 'lowpass'); },
+    // a footstep (running only). Each ground sounds different: soft (grass/sand), stone, wood,
+    // metal, water — so you can tell where someone is from their steps.
+    step(vol = 1, surface = 'stone') {
+      if (!on() || vol < 0.03) return;
+      const r = Math.random();
+      if (surface === 'soft') { noise(0.09, 380 + r * 160, 0.3 * vol, 'lowpass'); noise(0.05, 1800, 0.05 * vol, 'bandpass', 0.02); return; }
+      if (surface === 'wood') { tone(170 + r * 40, 0.07, 0.3 * vol, 'triangle', 110); noise(0.04, 1200, 0.12 * vol, 'bandpass'); return; }
+      if (surface === 'metal') { tone(620 + r * 80, 0.12, 0.12 * vol, 'square', 480); noise(0.05, 2600, 0.12 * vol, 'bandpass'); return; }
+      if (surface === 'water') { noise(0.16, 900 + r * 400, 0.28 * vol, 'bandpass'); tone(420, 0.08, 0.06 * vol, 'sine', 900, 0.03); return; }
+      noise(0.035, 2400 + r * 900, 0.2 * vol, 'bandpass');            // stone: heel click…
+      noise(0.07, 650 + r * 250, 0.22 * vol, 'lowpass', 0.025);       // …and the scuff
+    },
+    // landing after a jump
+    land(vol = 1, surface = 'stone') {
+      if (!on() || vol < 0.03) return;
+      tone(110, 0.12, 0.3 * vol, 'sine', 60);
+      this.step(vol * 1.2, surface);
+    },
+    // someone else refilling their blaster (gurgle), quieter than yours: you hear it up close
+    reloadFar(vol = 1) {
+      if (!on() || vol < 0.05) return;
+      for (let i = 0; i < 4; i++) { const f = 250 + Math.random() * 300; tone(f, 0.07, 0.1 * vol, 'sine', f * 1.8, i * 0.14); }
+    },
     // "bloop" of a bubble being blown
     // each blaster has its own bubbly voice
     shoot(vol = 1, kind = 'bloom') {

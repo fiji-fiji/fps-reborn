@@ -35,7 +35,7 @@ class Arrows {
     };
     a.mesh.position.copy(a.pos);
     this.list.push(a);
-    Sound.bowRelease(this.game._volumeAt(pos));
+    Sound.at(pos, 'bowRelease', this.game._volumeAt(pos));
   }
 
   update(dt) {
@@ -77,7 +77,7 @@ class Arrows {
         a.stuck = true;
         a.life = 5;
         g.effects.bubbleBurst(wall.point, wall.normal, 8, 1.5);
-        Sound.thunk(g._volumeAt(a.pos));
+        Sound.at(a.pos, 'thunk', g._volumeAt(a.pos));
       } else {
         a.pos.add(step);
       }

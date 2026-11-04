@@ -3,6 +3,17 @@
 // strafe between bursts, chase where they last saw you, and turn toward whoever hits
 // them. Where they go comes from the game mode (plant, defend a site, uproot, ...).
 // They use the same movement and blaster as you.
+//
+// How they think (fps principles: information wins fights):
+//  - Team intel: what one bot sees or hears is shared with its team (call-outs).
+//  - Cone of danger: when not fighting, the crosshair sits on the freshest known enemy spot.
+//  - Info advantage: if we know where someone is and they don't know about us, go peek
+//    them pre-aimed (they still have to notice us and turn). A reload or close footsteps
+//    heard with a close-range blaster = pounce.
+//  - Stealth vs spotted: once an enemy has seen us (or we shot), don't stay put and don't
+//    chase blindly: relocate somewhere hidden, back toward teammates.
+//  - Hold angles from far back (closer to the corner = seen first), unless close-range.
+//  - Sound is information: footsteps, shots, refills and the chainsaw all tell them things.
 
 const BOT_LEVELS = {
   easy: {
@@ -139,6 +150,9 @@ class Bot {
   // ------------------------------------------------------------------
   update(dt, frozen) {
     this.model.update(dt, this.game.camera);
+    // dazzled by a Sparkle Pop: a golden aura everyone can see (fades out at the end)
+    const blind = this.alive ? this.blindUntil - this.game.time : 0;
+    this.model.setAura(blind > 0 ? Math.min(1, blind / 0.6) : 0, this.game.time);
     if (!this.alive) return;
     this.model.setCarrying(this.carrying);
     if (frozen) { this._prepWander(dt); return; }       // round hasn't started: stroll around spawn
@@ -162,6 +176,7 @@ class Bot {
     }
 
     this._siteUtility();
+    if (!engaged) this._considerPeek();
     const cmd = { fwd: 0, right: 0, jump: false, crouch: false, walk: this._shouldSneak() };
     const move = this.actionHeld ? null : this._decideMove(dt, engaged, cmd);
     if (this.tactic && this.tactic.type === 'hold') cmd.crouch = true;   // small and quiet while holding an angle
@@ -175,6 +190,8 @@ class Bot {
 
     this.model.setPose(this.mover.pos, this.mover.yaw, this.mover.pitch + this.gun.recoilPitch,
       this.mover.horizontalSpeed, dt);
+    // planting / sawing: the whole body does it, so everyone can see what's going on
+    this.model.setAction(mode.planter === this ? 'plant' : mode.defuser === this ? 'saw' : null, this.game.time, mode.boo && mode.boo.pos);
   }
 
   // Before GO: wander around inside our spawn (walking, looking around), never leaving it.
@@ -247,6 +264,7 @@ class Bot {
       this.lostTime = 0;
       this.lastSeen.copy(best.pos);
       this.lastSeenAt = g.time;
+      g.addIntel(this.team, best, best.pos, true);              // call it out to the team
       if (fresh || g.time - this.lastEval > 0.6) { this.lastEval = g.time; this._lastJudged = best; this._decideDuel(best, bestD); }
       this.lookAt = null;
       this.chasing = false;
@@ -260,6 +278,9 @@ class Bot {
         this.lookAt = null;
         this.chasing = false;
         this.path = null;
+      } else if (!this.chasing && this._spotted() && !this.carrying && !this._mustRush() &&
+                 (this.health + this.shield < 80 || this.boldness < 0.15) && this._relocate(this.lastSeen)) {
+        // they know where we are now: don't sit here and don't run at them; move somewhere else
       } else if (!this.chasing) {
         // go check where we last saw them
         this.chasing = true;
@@ -272,14 +293,91 @@ class Bot {
     }
   }
 
+  // Were we seen (or did we shoot) in the last couple of seconds? Then they know where we are.
+  _spotted() {
+    const g = this.game, t = g.time;
+    if (t - (this.gun.lastShotAt ?? -99) < 2 || t - (this.firedAt || -99) < 2) return true;
+    for (const e of g.entities) {
+      if (!e.alive || e.team === this.team || e.team === 'buddy') continue;
+      if (e.target === this && e.targetVisible) return true;
+      if (e.isPlayer && e.mover) {                                   // is the player looking at us?
+        const dx = this.pos.x - e.pos.x, dz = this.pos.z - e.pos.z, d = Math.hypot(dx, dz) || 1;
+        const dot = (-Math.sin(e.mover.yaw) * dx - Math.cos(e.mover.yaw) * dz) / d;
+        if (dot > 0.75 && d < 45 && g.canSee(e.mover.eyePosition(new THREE.Vector3()), this)) return true;
+      }
+    }
+    return false;
+  }
+
+  // the objective says: go now (e.g. the tree has to be cut down)
+  _mustRush() { return !!(this.goal && this.goal.rush) || !!(this.game.mode.botMustRush && this.game.mode.botMustRush(this)); }
+
+  // the closest teammate (to fall back toward)
+  _nearestFriend() {
+    let best = null, bd = Infinity;
+    for (const e of this.game.entities) {
+      if (e === this || !e.alive || e.team !== this.team || !e.mover) continue;
+      const d = e.pos.distanceTo(this.pos);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+
+  // Spotted: move to somewhere `threatPos` can't see, back toward the team.
+  _relocate(threatPos) {
+    const friend = this._nearestFriend();
+    const eye = threatPos.clone().setY(threatPos.y + 1.5);
+    const c = this.game.findCover(this.pos, eye, 10, friend ? friend.pos : null);
+    if (!c || !this._pathTo(c[0] + 0.5, c[1] + 0.5)) return false;
+    this.goal = null; this.chasing = false;
+    this.tactic = { type: 'hide', look: threatPos.clone().setY(threatPos.y + 1.4), until: this.game.time + 6 };
+    this.lastHide = this.game.time;
+    return true;
+  }
+
+  // Info advantage: walk up pre-aimed at where we know an enemy is.
+  _peek(pos, seconds = 3) {
+    if (!this._pathTo(pos.x, pos.z)) return false;
+    this.goal = null; this.chasing = false;
+    this.tactic = { type: 'peek', look: pos.clone().setY(pos.y + 1.4), until: this.game.time + seconds };
+    this.lookAt = this.tactic.look.clone();
+    return true;
+  }
+
+  // Every so often: is there an enemy we know about who doesn't know about us? Go get them.
+  _considerPeek() {
+    const g = this.game, t = g.time;
+    if (t - (this.lastPeekCheck || -9) < 0.6) return;
+    this.lastPeekCheck = t;
+    if (this.tactic || this.carrying || this.actionHeld || this._mustRush() || this._spotted()) return;
+    if (this.health + this.shield < 55 || this.gun.busy) return;
+    let best = null, bd = Infinity;
+    for (const i of g.intelFor(this.team, 4)) {
+      const d = Math.hypot(i.pos.x - this.pos.x, i.pos.z - this.pos.z);
+      if (d < 5 || d > 16) continue;
+      const enemy = i.who && i.who.alive !== undefined ? i.who : null;
+      if (enemy && enemy.target === this && enemy.targetVisible) continue;   // they're onto us
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (!best) return;
+    const enemy = best.who && best.who.alive !== undefined ? best.who : null;
+    const score = enemy ? this._duelScore(enemy, bd) : this.boldness;
+    if (score > -0.2) this._peek(best.pos, 3.5);
+  }
+
   // Returns a world-space move direction { x, z } (or null to stand still).
   _decideMove(dt, engaged, cmd) {
     const L = this.level, me = this.mover, t = this.game.time;
     const tac = this.tactic;
     if (tac && t > tac.until) this.tactic = null;
+    if (this.tactic && !engaged && this._mustRush()) { this.tactic = null; this.path = null; }   // the objective comes first
     if (this.tactic && this.tactic.type === 'hide') {
       if (!this.path) { this._startHold(this.tactic.look); return null; }
       return this._followPath(engaged, cmd);                        // backing off to cover
+    }
+    if (this.tactic && this.tactic.type === 'peek' && !engaged) {
+      if (!this.path) { this._startHold(this.tactic.look, 1.5); return null; }   // nobody there: hold a moment
+      return this._followPath(engaged, cmd);
     }
     if (engaged) {
       const aboutToShoot = this.seenTime >= L.reaction * 0.5 && this.pauseTimer <= 0 && this.gun.ammo > 0 && !this.gun.busy;
@@ -324,7 +422,7 @@ class Bot {
 
   _arrived(engaged) {
     this.path = null;
-    if (this.tactic && this.tactic.type === 'hide') { this._startHold(this.tactic.look); return; }
+    if (this.tactic && (this.tactic.type === 'hide' || this.tactic.type === 'peek')) { this._startHold(this.tactic.look, this.tactic.type === 'peek' ? 1.5 : undefined); return; }
     this.chasing = false;
     if (!engaged) this.lookAt = null;
     const goal = this.goal;
@@ -380,6 +478,8 @@ class Bot {
       yaw -= this.gun.recoilYaw * L.recoilComp;
     } else if (this.lookAt) {
       [yaw, pitch] = anglesTo(eye, this.lookAt);
+    } else if (this._danger()) {
+      [yaw, pitch] = anglesTo(eye, this._danger());               // crosshair on where they probably are
     } else if (move) {
       yaw = Math.atan2(-move.x, -move.z);
       pitch = 0;
@@ -392,6 +492,20 @@ class Bot {
     const dpitch = Math.max(-lim, Math.min(lim, (pitch - me.pitch) * k));
     me.yaw = wrapAngle(me.yaw + dyaw);
     me.pitch += dpitch;
+  }
+
+  // The freshest place an enemy is known to be (within 30 m, last 5 s), at head height.
+  _danger() {
+    const g = this.game;
+    if (this._dangerAt === g.time) return this._dangerPos;
+    this._dangerAt = g.time;
+    let best = null, bt = -Infinity;
+    for (const i of g.intelFor(this.team, 5)) {
+      if (Math.hypot(i.pos.x - this.pos.x, i.pos.z - this.pos.z) > 30 || i.t <= bt) continue;
+      bt = i.t; best = i;
+    }
+    this._dangerPos = best ? best.pos.clone().setY(best.pos.y + 1.4) : null;
+    return this._dangerPos;
   }
 
   // Turn a world-space move direction into forward/right input relative to where we look.
@@ -502,23 +616,36 @@ class Bot {
     this.goal = null;
   }
 
-  // Heard running footsteps nearby.
-  hear(pos) {
-    if (!this.alive || this.targetVisible || this.carrying || this.actionHeld) return;
-    this.heardAt = this.game.time;
-    const mode = this.game.mode;
+  // Heard something: 'step' (running footsteps), 'shot' or 'reload'. `who` made it.
+  hear(pos, kind = 'step', who = null) {
+    if (!this.alive) return;
+    const g = this.game, d = pos.distanceTo(this.pos);
+    // tell the team (a sound only gives a rough spot, more so from far away)
+    const rough = pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * d * 0.08, 0, (Math.random() - 0.5) * d * 0.08));
+    g.addIntel(this.team, who, rough, false);
+    if (this.targetVisible || this.carrying || this.actionHeld || this._mustRush()) return;
+    this.heardAt = g.time;
+    if (this.tactic && this.tactic.type !== 'hold') return;
+    const strong = this.health + this.shield >= 60;
+    const closeGun = this.gun.def.key === 'sunflower' || this.gun.def.key === 'tulip';
+    // they're refilling right next to us: they can't shoot back right now. Go!
+    if (kind === 'reload' && d < 12 && strong && this._peek(pos, 3)) return;
+    // close footsteps + a close-range blaster + they don't know we're here: pounce
+    if (kind === 'step' && d < 9 && closeGun && strong && !this._spotted() && this._peek(pos, 2.5)) return;
+    if (kind === 'shot' && d > 14) return;                         // far shots: just good to know
+    const mode = g.mode;
     const attacking = mode.kind === 'standard' && mode.sideOf(this.team) === 'attack' && mode.phase === 'live';
-    if (this.tactic || attacking || Math.random() < 0.5) return;  // attackers keep moving
-    if (this.health + this.shield >= 60) this._startHold(pos.clone().setY(pos.y + 1.4), 2 + Math.random() * 3);
-    else this._hideFrom(pos);
+    if (this.tactic || attacking || Math.random() < 0.4) return;   // attackers keep moving (the crosshair still turns to it)
+    if (strong) this._startHold(pos.clone().setY(pos.y + 1.4), 2 + Math.random() * 3);
+    else this._relocate(pos) || this._hideFrom(pos);
   }
 
   // Someone just got popped.
   onPopped(victim, attacker) {
     if (!this.alive || this.carrying || this.actionHeld) return;
     if (attacker === this) {
-      // got one: don't keep standing on the same spot, their friends know where we are now
-      if (Math.random() < 0.55) this._hideFrom(victim.pos);
+      // got one: we're spotted now (their friends heard it). Don't keep standing on the same spot.
+      if (!this._mustRush() && Math.random() < 0.75) this._relocate(victim.pos) || this._hideFrom(victim.pos);
       return;
     }
     if (victim.team === this.team && attacker && attacker.pos && !this.targetVisible &&
@@ -532,6 +659,7 @@ class Bot {
   // Walk (silently) when enemies are probably close, or when sneaking up on a site.
   _shouldSneak() {
     const g = this.game, t = g.time, mode = g.mode;
+    if (this.goal && this.goal.rush) return false;               // no time to be quiet
     if (this.tactic) return true;
     const attacking = mode.kind === 'standard' && mode.phase === 'live' && mode.sideOf(this.team) === 'attack';
     if (attacking) {
@@ -581,7 +709,7 @@ class Bot {
   _tryFire(dt) {
     const L = this.level, gun = this.gun, me = this.mover;
     if (this.seenTime < L.reaction) return;
-    if (gun.ammo === 0) { gun.startReload(); return; }
+    if (gun.ammo === 0) { this._reload(); return; }
     if (!gun.ready || this.pauseTimer > 0) return;
 
     if (gun.def.bow) {                       // pull the string all the way first
@@ -604,8 +732,9 @@ class Bot {
       this.game.arrows.fire(this, this.model.muzzlePosition(new THREE.Vector3()), dirs[0], gun.def, 1);
     } else {
       for (const dir of dirs) this.game.fireShot(this, eye.clone(), dir, gun);
-      Sound.shoot(this.game._volumeAt(me.pos), gun.def.key);
+      this.game.shotHeard(this, eye.clone(), gun.def.key);
     }
+    this.firedAt = this.game.time;
     this.burstLeft--;
     if (this.burstLeft <= 0) {
       this.burstLeft = randRange(L.burst);
@@ -615,6 +744,15 @@ class Bot {
 
   _idleReload() {
     const gun = this.gun;
-    if (!gun.busy && gun.ammo < gun.def.magSize * 0.5) gun.startReload();
+    if (!gun.busy && gun.ammo < gun.def.magSize * 0.5) this._reload();
+  }
+
+  // refilling makes a little gurgle that people nearby can hear (good to know!)
+  _reload() {
+    if (!this.gun.startReload()) return;
+    const at = this.mover.eyePosition(new THREE.Vector3());
+    Sound.at(at, 'reloadFar', this.game._volumeAt(at));
+    for (const b of this.game.bots)
+      if (b.alive && b.team !== this.team && b.pos.distanceTo(at) < 12) b.hear(at.clone(), 'reload', this);
   }
 }

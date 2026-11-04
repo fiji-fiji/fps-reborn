@@ -241,6 +241,8 @@ function setJarLevel(vm, frac) {
   if (q > 0) vm.liquid.geometry = jarLiquidGeometry(q);
 }
 
+const INSPECT_TIME = 2.4;   // seconds the [Y] inspect takes
+
 class Viewmodel {
   constructor(viewCamera) {
     this.camera = viewCamera;
@@ -273,9 +275,38 @@ class Viewmodel {
     this.vm.group.visible = true;
     this.gun = gun;
     this.swapT = 0.35;
+    this.inspectT = 0;
   }
 
-  // Fluffy paws holding the item. `y` = where the back of the paw faces, `z` = where the
+  // [Y]: take a good look at what you're holding (turn it over, show both sides).
+  inspect() {
+    if (!this.vm || (this.gun && this.gun.reloading > 0)) return;
+    this.inspectT = INSPECT_TIME;
+  }
+
+  // the inspect show, on top of the normal pose. p = 0..1 through it.
+  _applyInspect(g, dt) {
+    if (!(this.inspectT > 0)) return;
+    this.inspectT -= dt;
+    const p = 1 - Math.max(0, this.inspectT) / INSPECT_TIME;
+    const ease = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+    const w = ease(p / 0.16) - ease((p - 0.84) / 0.16);          // bring it in / put it back
+    const flip = ease((p - 0.42) / 0.28);                          // from the left side over to the right side
+    if (this.vm.knife) {
+      g.position.x -= w * 0.12; g.position.y += w * 0.05;
+      g.rotation.y += w * (-0.6 + flip * 1.2);
+      g.rotation.z += ease((p - 0.25) / 0.3) * Math.PI * 2;       // a little twirl
+      return;
+    }
+    g.position.x -= w * 0.13;
+    g.position.y += w * 0.05;
+    g.position.z += w * 0.06;
+    g.rotation.x += w * (0.25 + Math.sin(p * Math.PI * 2) * 0.08);
+    g.rotation.y += w * (-0.95 + flip * 1.7);
+    g.rotation.z += w * (0.35 - flip * 0.6);
+  }
+
+  // Hands holding the item. `y` = where the back of the paw faces, `z` = where the
   // forearm goes (both in the item's own space); the toes curl around the grip.
   _orientPaw(paw, y, z, scale, mirror = false) {
     const Y = new THREE.Vector3(...y).normalize(), Z = new THREE.Vector3(...z).normalize();
@@ -335,38 +366,36 @@ class Viewmodel {
     return this.holdPawModel;
   }
 
-  // How full the jar is, in %, on a little tag stuck to the front of the jar.
-  // red under 25 · orange under 50 · green under 80 · purple 80 and up
+  // (Not shown for now.) How full the jar is, in %, carved into the top of the stem (with coloured paint in the
+  // grooves): red under 25 · orange under 50 · green under 80 · purple 80 and up
   _jarLabel(vm, frac) {
     if (!vm.pctTag) {
       const canvas = document.createElement('canvas');
       canvas.width = 128; canvas.height = 64;
       const tex = new THREE.CanvasTexture(canvas);
       tex.encoding = THREE.sRGBEncoding;
-      tex.anisotropy = 4;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.05),
-        new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-      mesh.position.set(0, JAR.y + JAR.r * 0.9, 0.03 + JAR.r * JAR.stretch + 0.004);
-      mesh.renderOrder = 2;                              // after the glass
+      tex.anisotropy = 8;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.056, 0.028),
+        new THREE.MeshLambertMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+      mesh.rotation.x = -Math.PI / 2;                    // lying flat on the stem, readable from behind
+      mesh.position.set(0, 0.0356, 0.17);
+      mesh.renderOrder = 2;
       vm.group.add(mesh);
       vm.pctTag = { canvas, tex, text: '' };
     }
     const pct = Math.round(Math.max(0, Math.min(1, frac)) * 100);
-    const color = pct < 25 ? '#ff5a5a' : pct < 50 ? '#ffa53d' : pct < 80 ? '#5ee08a' : '#c77dff';
+    const color = pct < 25 ? '#ff5a5a' : pct < 50 ? '#ffa53d' : pct < 80 ? '#7dff9a' : '#d59bff';
     const text = `${pct}%`;
     if (text === vm.pctTag.text) return;
     vm.pctTag.text = text;
     const c = vm.pctTag.canvas, g = c.getContext('2d');
     g.clearRect(0, 0, c.width, c.height);
-    g.fillStyle = 'rgba(20, 24, 36, 0.72)';
-    g.beginPath();
-    if (g.roundRect) g.roundRect(4, 6, 120, 52, 26); else g.rect(4, 6, 120, 52);
-    g.fill();
-    g.font = 'bold 38px system-ui, -apple-system, sans-serif';
+    g.font = 'bold 46px system-ui, -apple-system, sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillStyle = color;
-    g.fillText(text, 64, 34);
+    g.fillStyle = 'rgba(200, 255, 190, 0.6)'; g.fillText(text, 66, 35);   // light lower edge of the groove
+    g.fillStyle = 'rgba(12, 44, 14, 0.9)'; g.fillText(text, 62, 31);      // dark upper edge (it's cut in)
+    g.fillStyle = color; g.fillText(text, 64, 33);                         // paint in the groove
     vm.pctTag.tex.needsUpdate = true;
   }
 
@@ -452,9 +481,8 @@ class Viewmodel {
   // Left hand (painted nails, sleeve, bracelet) holding a soap bottle, used for refilling.
   _buildHand(vm) {
     const lam = (hex, o = {}) => new THREE.MeshLambertMaterial({ color: hex, ...o });
-    // a fluffy paw (white fur, pink claws) in a team sleeve
-    const skin = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 14, 8, 41), color: BICHON.fur, emissive: DOG_GLOW });
-    const nail = lam(0xff3d8b, { emissive: 0x551030 });
+    // a hand with painted nails, a gold bracelet and a team sleeve
+    const skin = lam(HAND_SKIN), nail = lam(0xff3d8b, { emissive: 0x551030 });
     const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 20, 8, 43), color: PAW.sleeve });
     const gold = lam(0xffd36b, { emissive: 0x403010 });
     const bottleMat = lam(0xfff1a6, { emissive: 0x2a2410 });
@@ -474,14 +502,14 @@ class Viewmodel {
     add(held, BW, 0.085, BW, bottleMat, 0, 0, 0);
     add(held, 0.022, 0.02, 0.022, cap, 0, 0.052, 0);
     vm.spout = add(held, 0.012, 0.016, 0.012, cap, 0, 0.07, 0);
-    add(held, 0.03, 0.08, 0.066, skin, -BW / 2 - 0.014, -0.004, 0);    // paw
-    for (let i = 0; i < 4; i++) {                                       // chubby toes + painted claws
-      const y = 0.027 - i * 0.018;
-      const len = i === 3 ? 0.036 : 0.044;
-      add(held, len, 0.019, 0.02, skin, -BW / 2 + len / 2 - 0.008, y, BW / 2 + 0.009);
-      add(held, 0.009, 0.011, 0.006, nail, -BW / 2 + len - 0.008, y, BW / 2 + 0.02);
+    add(held, 0.022, 0.075, 0.06, skin, -BW / 2 - 0.011, -0.004, 0);   // palm
+    for (let i = 0; i < 4; i++) {                                       // fingers + painted nails
+      const y = 0.026 - i * 0.017;
+      const len = i === 3 ? 0.04 : 0.05;
+      add(held, len, 0.014, 0.014, skin, -BW / 2 + len / 2 - 0.006, y, BW / 2 + 0.007);
+      add(held, 0.009, 0.012, 0.004, nail, -BW / 2 + len - 0.01, y, BW / 2 + 0.0155);
     }
-    add(held, 0.036, 0.02, 0.02, skin, -0.008, 0.02, -BW / 2 - 0.01);   // dewclaw
+    add(held, 0.04, 0.016, 0.016, skin, -0.008, 0.02, -BW / 2 - 0.008);   // thumb
 
     const arm = new THREE.Group();                                      // wrist, bracelet, sleeve
     arm.rotation.set(-0.75, 0, -0.3);
@@ -637,6 +665,7 @@ class Viewmodel {
   }
 
   onFire() {
+    this.inspectT = 0;
     if (this.gun && this.gun.def.melee) { this.swingT = 0.32; return; }
     this.kick = this.gun && this.gun.def.pellets ? 2 : 1;
     this.flashTime = 0.06;
@@ -658,19 +687,21 @@ class Viewmodel {
     const bx = Math.sin(this.bobPhase) * 0.012 * bobAmt;
     const by = -Math.abs(Math.cos(this.bobPhase)) * 0.012 * bobAmt - this.swapT * 0.5;
 
-    if (vm.bow) return this._updateBow(vm, gun, bx, by);
+    if (vm.bow) { this._updateBow(vm, gun, bx, by); if (gun.charge > 0) this.inspectT = 0; this._applyInspect(g, dt); return; }
     if (vm.knife) {
       // swipe from right to left
       this.swingT = Math.max(0, (this.swingT || 0) - dt);
       const s = this.swingT > 0 ? Math.sin((1 - this.swingT / 0.32) * Math.PI) : 0;
       g.position.set(vm.restPos.x + bx - s * 0.18, vm.restPos.y + by + s * 0.05, vm.restPos.z - s * 0.08);
       g.rotation.set(0.25 - s * 0.3, 0.25 + s * 0.9, 0.4 - s * 0.9);
+      this._applyInspect(g, dt);
       return;
     }
 
     vm.flash.visible = this.flashTime > 0;
     vm.flash.scale.setScalar(1 + (0.06 - this.flashTime) * 12);
     const reloading = gun.reloading > 0;
+    if (reloading) this.inspectT = 0;
     const t = reloading ? 1 - gun.reloading / gun.def.reloadTime : 0;
     // every refill picks a random little show (the classic pour, or one of the sassy ones)
     if (reloading && !this._wasReloading) {
@@ -689,12 +720,12 @@ class Viewmodel {
     }
     this.jarFrac = level / gun.def.magSize;
     setJarLevel(vm, this.jarFrac);
-    this._jarLabel(vm, this.jarFrac);
 
     // refilling: the blaster dips and tilts a little towards the hand to present the jar
     const lean = reloading ? (sassy ? 0.35 * Math.sin(t * Math.PI) : ph.reach) : 0;
     g.position.set(vm.restPos.x + bx - lean * 0.02, vm.restPos.y + by - lean * 0.04, vm.restPos.z + this.kick * 0.05);
     g.rotation.set(this.kick * 0.06 + lean * 0.12, 0, lean * 0.22);
+    this._applyInspect(g, dt);
     if (sassy) {
       g.rotation.z += this.sassy.wobble;                // she bumped the jar
       g.rotation.x += this.sassy.wobble * 0.4;
@@ -726,6 +757,7 @@ class Viewmodel {
     const pull = gun.charge;                                    // 0..1
     const nockZ = 0.02 + pull * 0.26;
     g.position.set(vm.restPos.x + bx, vm.restPos.y + by, vm.restPos.z + pull * 0.04);
+    g.rotation.set(0, 0.18, 0.25);      // angled in a little so you can see the arrow
     // string from each tip to the nock point
     const nock = new THREE.Vector3(0, 0, nockZ);
     for (const [s, tip] of [[vm.strA, vm.tipTop], [vm.strB, vm.tipBot]]) {

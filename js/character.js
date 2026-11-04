@@ -13,6 +13,9 @@ const TEAM_SPECIES = { blue: 'dog', red: 'cat' };
 const TEAM_CSS = { blue: '#5aa8ff', red: '#ff5a5a', buddy: '#ffd36b' };
 const otherTeam = t => (t === 'blue' ? 'red' : 'blue');
 const PIXEL = 0.1;   // size of the pixels characters burst into
+// Every player has their own colour (shown by the flower on their hat) and their own hat.
+const PLAYER_COLORS = [0xffd23f, 0xb46cff, 0x4fd17a, 0x3fb4ff, 0xff9a3c];   // yellow, purple, green, blue, orange
+const HAT_STYLES = ['beret', 'sunhat', 'tophat', 'bucket', 'cowboy', 'cap', 'boater', 'beanie', 'bowler', 'party'];
 
 // Hitboxes (axis-aligned, square so they work whichever way the character faces).
 // `h` is the current body height (shorter when crouching).
@@ -193,6 +196,7 @@ class CharacterModel {
         p.rotation.z = a - Math.PI / 2;
       }
       this.muzzle = pivot(bl, 0, 0, 0.3);
+      this.blaster = bl;
     }
 
     // name tag (teammates) and bubble meter bar (practice buddies)
@@ -235,7 +239,172 @@ class CharacterModel {
     scene.add(this.group);
   }
 
+  // A hat (one of HAT_STYLES) with a flower in this player's colour pinned to it. The flower
+  // always sits in the same place: on the band, front-left, facing out.
+  addHat(style, flowerHex) {
+    const lam = (c, e = 0) => { const m = new THREE.MeshStandardMaterial({ color: c, emissive: e, roughness: 0.75, metalness: 0 }); return m; };
+    const hat = new THREE.Group();
+    hat.position.y = 0.47;
+    this.head.add(hat);
+    const add = (geo, m, x, y, z, color, size) => {
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      hat.add(mesh);
+      this.parts.push({ mesh, w: size[0], h: size[1], d: size[2], color: () => color });
+      return mesh;
+    };
+    const box = (w, h, d, c, x, y, z) => add(roundedBoxGeometry(w, h, d, Math.min(w, h, d) * 0.3, 2), lam(c), x, y, z, c, [w, h, d]);
+    const cyl = (rt, rb, h, c, x, y, z, seg = 16) => add(new THREE.CylinderGeometry(rt, rb, h, seg), lam(c), x, y, z, c, [rb * 2, h, rb * 2]);
+    let band = 0.05, r = 0.24;                       // where the flower goes: band height + radius
+    switch (style) {
+      case 'beret':
+        cyl(0.27, 0.23, 0.08, 0xd84a5a, 0.03, 0.06, 0).rotation.z = -0.2;
+        box(0.03, 0.05, 0.03, 0xd84a5a, 0.03, 0.12, 0);
+        band = 0.04; r = 0.23; break;
+      case 'sunhat':
+        cyl(0.42, 0.42, 0.02, 0xf2d58a, 0, 0, 0, 24);
+        cyl(0.2, 0.23, 0.16, 0xf2d58a, 0, 0.09, 0);
+        cyl(0.235, 0.235, 0.045, 0xff8fb1, 0, 0.03, 0);
+        band = 0.03; r = 0.235; break;
+      case 'tophat':
+        cyl(0.3, 0.3, 0.02, 0x2a2a34, 0, 0, 0, 20);
+        cyl(0.19, 0.19, 0.34, 0x2a2a34, 0, 0.18, 0);
+        cyl(0.195, 0.195, 0.05, 0xc0304a, 0, 0.04, 0);
+        band = 0.04; r = 0.195; break;
+      case 'bucket':
+        cyl(0.24, 0.32, 0.08, 0x8fc7a8, 0, 0.01, 0);
+        cyl(0.21, 0.24, 0.13, 0x8fc7a8, 0, 0.1, 0);
+        band = 0.08; r = 0.23; break;
+      case 'cowboy':
+        cyl(0.4, 0.4, 0.025, 0xb07a44, 0, 0, 0, 24).scale.set(1, 1, 0.8);
+        box(0.3, 0.17, 0.3, 0xb07a44, 0, 0.1, 0);
+        box(0.31, 0.04, 0.31, 0x5a3a20, 0, 0.04, 0);
+        band = 0.04; r = 0.16; break;
+      case 'cap':
+        box(0.44, 0.15, 0.44, 0xffffff, 0, 0.06, 0);
+        box(0.36, 0.025, 0.2, 0xffffff, 0, 0.0, 0.28);       // the visor (front)
+        box(0.05, 0.03, 0.05, 0xff8fb1, 0, 0.15, 0);
+        band = 0.04; r = 0.22; break;
+      case 'boater':
+        cyl(0.36, 0.36, 0.02, 0xf5df9e, 0, 0, 0, 24);
+        cyl(0.22, 0.22, 0.12, 0xf5df9e, 0, 0.07, 0);
+        cyl(0.225, 0.225, 0.045, 0x2f4f8f, 0, 0.04, 0);
+        band = 0.04; r = 0.225; break;
+      case 'beanie':
+        cyl(0.21, 0.245, 0.2, 0x7fb3ff, 0, 0.06, 0);
+        cyl(0.25, 0.25, 0.06, 0x5a8fe0, 0, -0.01, 0);
+        add(new THREE.SphereGeometry(0.07, 10, 8), lam(0xffffff), 0, 0.2, 0, 0xffffff, [0.14, 0.14, 0.14]);
+        band = 0.0; r = 0.25; break;
+      case 'bowler':
+        cyl(0.3, 0.3, 0.02, 0x4a3328, 0, 0, 0, 20);
+        add(new THREE.SphereGeometry(0.21, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), lam(0x4a3328), 0, 0.02, 0, 0x4a3328, [0.42, 0.21, 0.42]);
+        cyl(0.212, 0.212, 0.04, 0x2a1c14, 0, 0.035, 0);
+        band = 0.035; r = 0.212; break;
+      case 'party':
+      default:
+        cyl(0.0, 0.18, 0.36, 0xc77dff, 0, 0.17, 0);
+        add(new THREE.SphereGeometry(0.05, 10, 8), lam(0xffd23f), 0, 0.37, 0, 0xffd23f, [0.1, 0.1, 0.1]);
+        band = 0.06; r = 0.16; break;
+    }
+    // the flower: five petals in the player's colour around a yellow middle, front-left
+    const flower = new THREE.Group();
+    const a = -0.6;                                   // a little to the left of the front (+z is the face)
+    flower.position.set(Math.sin(a) * (r + 0.02), band + 0.02, Math.cos(a) * (r + 0.02));
+    flower.rotation.y = a;
+    hat.add(flower);
+    const petalMat = lam(flowerHex, new THREE.Color(flowerHex).multiplyScalar(0.25));
+    for (let i = 0; i < 5; i++) {
+      const ang = (i / 5) * Math.PI * 2;
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.056, 10, 8), petalMat);
+      p.scale.set(1, 1, 0.45);
+      p.position.set(Math.cos(ang) * 0.062, Math.sin(ang) * 0.062, 0);
+      flower.add(p);
+      this.parts.push({ mesh: p, w: 0.1, h: 0.1, d: 0.05, color: () => flowerHex });
+    }
+    const mid = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), lam(0xffd23f, 0x332800));
+    mid.position.z = 0.018;
+    flower.add(mid);
+    hat.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    this.hat = hat;
+    this.flowerHex = flowerHex;
+  }
+
   setCarrying(v) { this.pod.visible = v; }
+
+  // Body language for the big actions, so everyone can see them (call after setPose):
+  //   'plant' — kneel down, blaster away, both arms reaching down to dig in front
+  //   'saw'   — blaster away, facing the tree (`target`), stepping up close to it, both arms
+  //             down on the chainsaw and shaking with it
+  setAction(kind, time, target = null) {
+    if (this.blaster) this.blaster.visible = !kind;
+    if (!kind) return;
+    if (kind === 'plant') {
+      this.group.position.y -= 0.42;
+      this.lLeg.rotation.x = this.rLeg.rotation.x = -1.3;      // sitting back on the heels
+      this.head.rotation.x = 0.55;                              // looking down at the hole
+      this.aim.rotation.x = 1.0 + Math.sin(time * 7) * 0.12;    // arms down in the dirt, digging
+      this.lArm.rotation.set(-1.35, 0, 0.25);
+      this.rArm.rotation.set(-1.35, 0, -0.25);
+    } else if (kind === 'saw') {
+      const buzz = Math.sin(time * 70) * 0.03;
+      if (target) {
+        const p = this.group.position, dx = target.x - p.x, dz = target.z - p.z, d = Math.hypot(dx, dz);
+        this.group.rotation.y = Math.atan2(dx, dz);              // face the trunk
+        if (d > 1.2) { p.x += dx / d * (d - 1.2); p.z += dz / d * (d - 1.2); }   // lean in close enough to reach
+      }
+      this.head.rotation.x = 0.45;
+      this.aim.rotation.x = 0.85 + buzz;                         // arms down on the saw, holding on tight
+      this.lArm.rotation.set(-1.35, 0, 0.3);
+      this.rArm.rotation.set(-1.35, 0, -0.3);
+      this.lLeg.rotation.x = 0.25; this.rLeg.rotation.x = -0.2;  // feet planted wide
+    }
+  }
+
+  // A glowing golden aura while dazzled by a Sparkle Pop (k = 0..1 strength).
+  setAura(k, time) {
+    if (!this.aura) {
+      if (k <= 0) return;
+      if (!CharacterModel.auraTex) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 128;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+        grad.addColorStop(0, 'rgba(255,236,150,0.95)');
+        grad.addColorStop(0.45, 'rgba(255,205,60,0.55)');
+        grad.addColorStop(1, 'rgba(255,190,40,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 128, 128);
+        CharacterModel.auraTex = new THREE.CanvasTexture(c);
+        CharacterModel.auraTex.encoding = THREE.sRGBEncoding;
+      }
+      this.aura = new THREE.Group();
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: CharacterModel.auraTex, color: 0xffd23f, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false }));
+      glow.scale.set(1.9, 2.7, 1);
+      glow.position.y = 1.0;
+      this.aura.add(glow);
+      this.auraGlow = glow;
+      this.auraStars = [];
+      const starMat = new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true });
+      for (let i = 0; i < 6; i++) {
+        const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), starMat);
+        this.aura.add(st);
+        this.auraStars.push(st);
+      }
+      this.auraStarMat = starMat;
+      this.group.add(this.aura);
+    }
+    this.aura.visible = k > 0.01;
+    if (!this.aura.visible) return;
+    this.auraGlow.material.opacity = k * (0.8 + Math.sin(time * 9) * 0.2);
+    this.auraStarMat.opacity = k;
+    this.auraStars.forEach((st, i) => {
+      const a = time * 3 + (i / this.auraStars.length) * Math.PI * 2;
+      st.position.set(Math.cos(a) * 0.42, 1.95 + Math.sin(time * 5 + i) * 0.05, Math.sin(a) * 0.42);
+      st.rotation.y = time * 6;
+    });
+  }
 
   // yaw uses the same convention as Mover (yaw 0 = looking north / -z).
   setPose(pos, yaw, pitch = 0, speed = 0, dt = 0) {

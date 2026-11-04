@@ -259,6 +259,113 @@ const Textures = (() => {
   makeTile('gravel', GRAVEL, noise(GRAVEL, 26));
   makeTile('gilded', [226, 184, 70], noise([226, 184, 70], 18));
 
+  // --- Barcelona ---
+  // painted stucco houses: a tall window with green shutters folded open and a little
+  // wrought-iron balcony, on an ochre / salmon / cream wall
+  const bcnFacade = wall => px => {
+    const line = [wall[0] * 0.9, wall[1] * 0.9, wall[2] * 0.9];
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        let c = y === 15 ? line : wall;
+        if (x >= 5 && x <= 10 && y >= 2 && y <= 12) c = x === 5 || x === 10 || y === 2 ? [246, 238, 222] : (x + y) % 6 === 0 ? [96, 120, 142] : [52, 64, 80];
+        if ((x === 3 || x === 4 || x === 11 || x === 12) && y >= 2 && y <= 12) c = y % 2 ? [58, 120, 82] : [48, 104, 70];   // shutters
+        if (y >= 10 && y <= 13 && x >= 3 && x <= 12 && (y === 10 || y === 13 || x % 2 === 0)) c = [40, 40, 48];   // balcony rail
+        if (y === 1 && x >= 4 && x <= 11) c = line;
+        px(x, y, c, (rand() - 0.5) * 8);
+      }
+  };
+  makeTile('bcn_ochre', [226, 178, 112], bcnFacade([226, 178, 112]));
+  makeTile('bcn_pink', [232, 160, 140], bcnFacade([232, 160, 140]));
+  makeTile('bcn_cream', [240, 222, 190], bcnFacade([240, 222, 190]));
+  makeTile('stucco', [232, 200, 150], noise([232, 200, 150], 10));
+  // curved terracotta roof tiles
+  makeTile('terracotta', [196, 98, 62], px => {
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        const off = (y >> 2) % 2 ? 2 : 0;
+        const k = ((x + off) % 4) / 3;
+        const shade = y % 4 === 3 ? -40 : Math.sin(k * Math.PI) * 26 - 10;
+        px(x, y, [196 + shade, 98 + shade * 0.6, 62 + shade * 0.4], (rand() - 0.5) * 8);
+      }
+  });
+  // the grey pavement tile with a four-petal flower on it
+  makeTile('panot', [196, 192, 186], px => {
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        const lx = x % 8, ly = y % 8;
+        const grout = lx === 0 || ly === 0;
+        const petal = [[2, 2], [5, 2], [2, 5], [5, 5]].some(([cx, cy]) => Math.hypot(lx - cx - 0.5, ly - cy - 0.5) < 1.6);
+        px(x, y, grout ? [160, 156, 150] : petal ? [174, 170, 164] : [198, 194, 188], (rand() - 0.5) * 8);
+      }
+  });
+  // wavy promenade paving
+  makeTile('wave_tile', [214, 200, 170], px => {
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        const wv = Math.sin((x / TILE) * Math.PI * 2) * 2;
+        const band = Math.floor((y + wv + 16) / 4) % 2;
+        px(x, y, band ? [222, 208, 176] : [176, 92, 70], (rand() - 0.5) * 8);
+      }
+  });
+  // broken-tile mosaic: bright shards with white grout
+  makeTile('trencadis', [80, 160, 200], px => {
+    const cols = [[64, 150, 214], [250, 206, 70], [240, 110, 90], [96, 190, 120], [250, 250, 245], [150, 110, 210]];
+    const pts = [];
+    for (let i = 0; i < 18; i++) pts.push([rand() * 16, rand() * 16, cols[Math.floor(rand() * cols.length)]]);
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        let a = Infinity, b = Infinity, c = null;
+        for (const p of pts) {
+          const d = Math.min(Math.hypot(x - p[0], y - p[1]), Math.hypot(x - p[0] + 16, y - p[1]), Math.hypot(x - p[0] - 16, y - p[1]),
+            Math.hypot(x - p[0], y - p[1] + 16), Math.hypot(x - p[0], y - p[1] - 16));
+          if (d < a) { b = a; a = d; c = p[2]; } else if (d < b) b = d;
+        }
+        px(x, y, b - a < 0.7 ? [238, 236, 228] : c, (rand() - 0.5) * 10);
+      }
+  });
+  // old-town stone: big worn sandy blocks
+  makeTile('gothic', [176, 156, 124], px => {
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        const off = (y >> 3) % 2 ? 5 : 0;
+        const line = y % 8 === 7 || (x + off) % 10 === 9;
+        px(x, y, line ? [134, 118, 92] : [176, 156, 124], (rand() - 0.5) * 22);
+      }
+  });
+  makeTile('iron_green', [56, 108, 88], px => {
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) px(x, y, x % 8 === 0 || y % 8 === 0 ? [44, 86, 70] : [60, 116, 94], (rand() - 0.5) * 8);
+  });
+  // coloured glass panes in a green iron frame (the market roof)
+  makeTile('stained_glass', [120, 170, 200], px => {
+    const cols = [[110, 180, 230], [250, 200, 90], [240, 120, 110], [130, 200, 140]];
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        const frame = x % 4 === 0 || y % 4 === 0;
+        px(x, y, frame ? [44, 86, 70] : cols[((x >> 2) + (y >> 2) * 3) % cols.length], (rand() - 0.5) * 10);
+      }
+  });
+  makeTile('brick_red', [178, 86, 62], px => {
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        const off = (y >> 2) % 2 ? 4 : 0;
+        const mortar = y % 4 === 3 || (x + off) % 8 === 7;
+        px(x, y, mortar ? [214, 196, 170] : [178, 86, 62], (rand() - 0.5) * 16);
+      }
+  });
+  makeTile('orange_leaves', [70, 140, 64], px => {
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) {
+        const fruit = (x * 7 + y * 13) % 29 === 0 || (x * 11 + y * 5) % 37 === 0;
+        px(x, y, fruit ? [255, 150, 40] : rand() < 0.25 ? [96, 170, 84] : [70, 140, 64], (rand() - 0.5) * 18);
+      }
+  });
+  makeTile('cloth_yellow', [250, 210, 80], px => {
+    for (let y = 0; y < TILE; y++)
+      for (let x = 0; x < TILE; x++) px(x, y, (x >> 2) % 2 ? CREAM : [250, 204, 70], (rand() - 0.5) * 10);
+  });
+  makeTile('shop_blue', [40, 80, 130], shop([40, 80, 130]));
+
   const atlas = new THREE.CanvasTexture(canvas);
   atlas.encoding = THREE.sRGBEncoding;
   atlas.magFilter = THREE.LinearFilter;
@@ -366,6 +473,24 @@ const BLOCK_DEFS = [
   { name: 'gravel', all: 'gravel' },                                       // 33
   { name: 'gilded', all: 'gilded' },                                       // 34
   { name: 'limestone_slab', all: 'limestone', h: 0.5 },                    // 35
+  // Barcelona
+  { name: 'stucco', all: 'stucco' },                                       // 36
+  { name: 'bcn_ochre', all: 'bcn_ochre' },                                 // 37
+  { name: 'bcn_pink', all: 'bcn_pink' },                                   // 38
+  { name: 'bcn_cream', all: 'bcn_cream' },                                 // 39
+  { name: 'terracotta', all: 'terracotta' },                               // 40
+  { name: 'panot', all: 'panot' },                                         // 41
+  { name: 'wave_tile', all: 'wave_tile' },                                 // 42
+  { name: 'trencadis', all: 'trencadis' },                                 // 43
+  { name: 'trencadis_slab', all: 'trencadis', h: 0.5 },                    // 44
+  { name: 'gothic', all: 'gothic' },                                       // 45
+  { name: 'iron_green', all: 'iron_green' },                               // 46
+  { name: 'stained_glass', all: 'stained_glass' },                         // 47
+  { name: 'brick_red', all: 'brick_red' },                                 // 48
+  { name: 'orange_leaves', all: 'orange_leaves' },                         // 49
+  { name: 'cloth_yellow', all: 'cloth_yellow' },                           // 50
+  { name: 'shop_blue', all: 'shop_blue' },                                 // 51
+  { name: 'gothic_slab', all: 'gothic', h: 0.5 },                          // 52
 ];
 const B = {};
 BLOCK_DEFS.forEach((d, i) => { if (d) B[d.name] = i; });

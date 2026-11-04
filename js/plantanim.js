@@ -61,8 +61,8 @@ class PlantAnim {
     add(this.shovel, 0.14, 0.035, 0.035, lam(0xb5835a), 0, 1.08, 0);           // grip
     this.clump = add(this.shovel, 0.14, 0.06, 0.1, dirt, 0, 0.06, 0.03);         // dirt on the blade
 
-    // two fluffy paws (palm down, painted claws on top so you see them from above).
-    // They're coloured like whoever is planting (white Bichon fluff, or the cat's coat).
+    // two hands (palm down, painted nails on top so you see them from above),
+    // in the sleeve colour of whoever is planting.
     const makeHand = mirror => {
       const h = makePaw({ shadow: true });
       h.position.set(0, 0.3, 0.5);
@@ -227,7 +227,7 @@ class PlantAnim {
   _put(hand, local, target) { hand.position.copy(target).sub(local.clone().multiply(hand.scale).applyQuaternion(hand.quaternion)); }
   _tip(i) { return PAW.tip(i); }   // just under claw i
 
-  _snd(name, ...args) { if (this.vol > 0.12 && Sound[name]) Sound[name](...args); }
+  _snd(name, ...args) { if (this.vol > 0.12) Sound.at(this.digPoint, name, ...args); }
 
   update(p) {
     if (!this.active) return;
@@ -315,7 +315,7 @@ class PlantAnim {
     this.shovel.position.copy(pos);
     this.shovel.rotation.set(0.5, 0, s > 0.8 ? (s - 0.8) * 4 : 0);   // handle leans toward the planter; tips to dump
     this.clump.visible = s > 0.4 && s < 0.85;
-    for (const at of [0.35 / 3, 1.35 / 3, 2.35 / 3]) if (crossed(at * 0.45)) Sound.dig(this.vol);
+    for (const at of [0.35 / 3, 1.35 / 3, 2.35 / 3]) if (crossed(at * 0.45)) Sound.at(this.digPoint, 'dig', this.vol);
     for (const at of [0.85 / 3, 1.85 / 3, 2.85 / 3]) if (crossed(at * 0.45)) this._dirtBurst(new THREE.Vector3(-0.38, 0.3, 0.06));
   }
 
@@ -343,7 +343,7 @@ class PlantAnim {
       h.rotation.z = side * 0.15;
       if (sPrev < 0.75 && s >= 0.75) {                      // fling!
         this._specks(V(x, 0.08, 0.1), 5, { vel: [side * 0.3 - 0.5, 1.4, 0.7] });
-        if (side > 0) Sound.dig(this.vol * 0.6);
+        if (side > 0) Sound.at(this.digPoint, 'dig', this.vol * 0.6);
       }
     });
   }
@@ -507,7 +507,7 @@ class PlantAnim {
     else { B.position.lerpVectors(dump, start, ease01((s - 0.65) / 0.35)); B.rotation.set(0, 0, s < 0.8 ? 1.4 * Math.sin(span(s, 0.65, 0.8) * Math.PI) : 0); }
     this.cupDirt.visible = s > 0.3 && s < 0.72;
     for (const k of [0, 1, 2]) {
-      if (crossed((k + 0.3) / 3 * PLANT_TIMING.quick[0])) Sound.dig(this.vol * 0.7);
+      if (crossed((k + 0.3) / 3 * PLANT_TIMING.quick[0])) Sound.at(this.digPoint, 'dig', this.vol * 0.7);
       if (crossed((k + 0.7) / 3 * PLANT_TIMING.quick[0])) this._specks(V(-0.32, 0.3, 0.1), 5, { vel: [0, 0.4, 0], spread: 0.5 });
     }
   }
