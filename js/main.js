@@ -135,7 +135,9 @@
   const mapInfo = mapDef.build(world);
   // HD: the world drawn with real materials and bounce light (hdworld.js); otherwise the blocks
   let worldMesh = null;
+  const charsReady = HD.on && typeof HDChar !== 'undefined' && HDChar ? HDChar.ready() : null;   // (the HD dogs and cats)
   if (HD.on && HDWorld) { await HDWorld.ready(); worldMesh = HDWorld.build(world); }
+  if (charsReady) await charsReady;
   if (!worldMesh) {
     worldMesh = world.buildMesh();
     if (HD.on) HD.world(worldMesh);
@@ -156,6 +158,7 @@
   effects.viewer = camera.position;                  // bubbles stay out of your face
   HUD.init({ mode: { hud: () => null } });   // HUD elements ready before the match starts
   const game = new Game({ scene, world, mapInfo, effects, camera, difficulty: BOTS, modeName: MODE, net: netCfg });
+  if (charsReady) HDChar.warm(scene, camera);          // (compile the HD dogs' and cats' shaders now)
   if (netCfg && game.remotes.length && NET === 'host') new NetHost(game, Object.assign({ map: MAP_ID, mode: MODE, bots: BOTS }, netCfg));
   if (netCfg && game.remotes.length && NET === 'guest') new NetGuest(game, welcome);
   const nature = new Nature(game);                    // soft wind + birds (sound only)

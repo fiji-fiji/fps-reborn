@@ -1,0 +1,19 @@
+{
+ "source": "Poly Haven: kloofendal_48d_partly_cloudy_puresky (CC0)",
+ "authors": {
+  "Greg Zaal": "Original",
+  "Jarod Guest": "Sky edits"
+ },
+ "maxv": 4.0,
+ "elev": [
+  -10.0,
+  90.0
+ ],
+ "sunU": 0.59509,
+ "sunElev": 47.856,
+ "horizon": [
+  0.4309,
+  0.4634,
+  0.561
+ ]
+}

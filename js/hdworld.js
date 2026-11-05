@@ -33,7 +33,7 @@ const HDWorld = (() => {
     crate: { bevel: 0.03 },     sand: { bevel: 0.15 },     gravel: { bevel: 0.08 },   grass: { bevel: 0.12 },
     dirt: { bevel: 0.1 },       foliage: { bevel: 0.32 },  bark: { bevel: 0.1 },      paint: { bevel: 0.03 },
     gold: { bevel: 0.05 },      canvas: { bevel: 0.025 },  mosaic: { bevel: 0.2 },    glass: { bevel: 0.01 },
-    concrete: { bevel: 0.03 },  sandstone: { bevel: 0.08 },  clearglass: { bevel: 0.005 }, louver: { bevel: 0.01 },
+    concrete: { bevel: 0.03 },  sandstone: { bevel: 0.08 },  clearglass: { bevel: 0.005 }, louver: { bevel: 0.01 }, palmbark: { bevel: 0.05 },
   };
   const MAT_NAMES = Object.keys(MATS);
   const MAT_INDEX = {};

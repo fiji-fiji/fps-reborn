@@ -58,6 +58,19 @@ class CharacterModel {
   constructor(scene, o = {}) {
     const seed = o.seed || 1;
     const species = o.species || 'human';
+    // HD look: real animals (hdchar.js), when their bodies have loaded
+    if (typeof HDChar !== 'undefined' && HDChar && HDChar.has('dog') && HDChar.has('cat')) {
+      this.mats = []; this.parts = [];
+      this.group = new THREE.Group();
+      this.armed = !!o.armed;
+      this.walkPhase = 0;
+      HDChar.build(this, scene, o);
+      this.fur = this.rig.coat.a;
+      this.colors = { shirt: o.shirt || 0xff8fb1, pants: this.fur, skin: this.fur, hair: this.fur };
+      if (this.armed) this._blaster();
+      this._finish(scene, o);
+      return;
+    }
     const coat = CAT_COATS[seed % CAT_COATS.length];
     // dogs and cats have furry bodies: fur legs and arms, paws, and team clothes on top
     const fur = species === 'dog' ? BICHON.fur : species === 'cat' ? coat[0] : null;
@@ -184,21 +197,41 @@ class CharacterModel {
       // arms forward holding a small flower blaster
       this.lArm.rotation.set(-1.35, 0, 0.45);    // reaches across to the blaster
       this.rArm.rotation.set(-1.4, 0, -0.12);
-      const green = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
-      const petal = new THREE.MeshLambertMaterial({ color: 0xff8fb1 });
-      const yellow = new THREE.MeshLambertMaterial({ color: 0xffd36b });
-      const bl = pivot(this.aim, 0.14, -0.14, 0.42);
-      box(bl, 0.07, 0.07, 0.45, green, 0, 0, 0, () => 0x4caf50);
-      box(bl, 0.1, 0.1, 0.04, yellow, 0, 0, 0.25, () => 0xffd36b);
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2;
-        const p = box(bl, 0.06, 0.09, 0.03, petal, Math.cos(a) * 0.08, Math.sin(a) * 0.08, 0.24, () => 0xff8fb1);
-        p.rotation.z = a - Math.PI / 2;
-      }
-      this.muzzle = pivot(bl, 0, 0, 0.3);
-      this.blaster = bl;
+      this._blaster();
     }
+    this._finish(scene, o);
+  }
 
+  // a small flower blaster, held out in front (it hangs off `aim`, which tilts with the aim)
+  _blaster() {
+    const box = (parent, w, h, d, m, x, y, z, color) => {
+      const mesh = new THREE.Mesh(roundedBoxGeometry(w, h, d, Math.min(w, h, d) * 0.3), m);
+      mesh.position.set(x, y, z);
+      parent.add(mesh);
+      this.parts.push({ mesh, w, h, d, color });
+      return mesh;
+    };
+    const green = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+    const petal = new THREE.MeshLambertMaterial({ color: 0xff8fb1 });
+    const yellow = new THREE.MeshLambertMaterial({ color: 0xffd36b });
+    const bl = new THREE.Group();
+    bl.position.set(0.14, -0.14, 0.42);
+    this.aim.add(bl);
+    box(bl, 0.07, 0.07, 0.45, green, 0, 0, 0, () => 0x4caf50);
+    box(bl, 0.1, 0.1, 0.04, yellow, 0, 0, 0.25, () => 0xffd36b);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const p = box(bl, 0.06, 0.09, 0.03, petal, Math.cos(a) * 0.08, Math.sin(a) * 0.08, 0.24, () => 0xff8fb1);
+      p.rotation.z = a - Math.PI / 2;
+    }
+    this.muzzle = new THREE.Group();
+    this.muzzle.position.set(0, 0, 0.3);
+    bl.add(this.muzzle);
+    this.blaster = bl;
+  }
+
+  // name tag, meter, the seed pod: the same whichever body
+  _finish(scene, o) {
     // name tag (teammates) and bubble meter bar (practice buddies)
     if (o.name) {
       const c = document.createElement('canvas');
@@ -328,6 +361,7 @@ class CharacterModel {
     hat.traverse(o => { if (o.isMesh) o.castShadow = true; });
     this.hat = hat;
     this.flowerHex = flowerHex;
+    if (this.rig) this.rig.hasHat = true;
   }
 
   setCarrying(v) { this.pod.visible = v; }
@@ -338,6 +372,7 @@ class CharacterModel {
   //             down on the chainsaw and shaking with it
   setAction(kind, time, target = null) {
     if (this.blaster) this.blaster.visible = !kind;
+    if (this.rig) return this.rig.setAction(kind, time, target);
     if (!kind) return;
     if (kind === 'plant') {
       this.group.position.y -= 0.42;
@@ -408,6 +443,7 @@ class CharacterModel {
 
   // yaw uses the same convention as Mover (yaw 0 = looking north / -z).
   setPose(pos, yaw, pitch = 0, speed = 0, dt = 0) {
+    if (this.rig) return this.rig.setPose(pos, yaw, pitch, speed, dt);
     this.group.position.copy(pos);
     this.group.rotation.y = yaw + Math.PI;
     this.head.rotation.x = -pitch * 0.7;
@@ -445,12 +481,14 @@ class CharacterModel {
       if (b) m.emissive.setRGB(b.r + f, b.g + f, b.b + f); else m.emissive.setRGB(f, f, f);
     }
     if (this.bar) this.bar.quaternion.copy(camera.quaternion).premultiply(this.group.quaternion.clone().invert());
+    if (this.rig) this.rig.update(dt, camera);
   }
 
   // Cut the body into small cubes in world space: [{ pos, color }].
   pixelize() {
     this.group.updateMatrixWorld(true);
     const out = [];
+    if (this.rig) this.rig.pixelize(out);
     for (const p of this.parts) {
       const nx = Math.max(1, Math.round(p.w / PIXEL));
       const ny = Math.max(1, Math.round(p.h / PIXEL));

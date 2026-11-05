@@ -92,6 +92,34 @@ const HD = (() => {
   // Sky: gradient, sun disk, glow around the sun; also used (without the disk) to light the
   // scene through reflections. Outputs linear light (the post pass does the tone curve).
   // ---------------------------------------------------------------------------------------
+  // the photographed sky (assets/hd/sky.webp + sky.json, from tools/hd/make_sky.py); until it
+  // has loaded (or if it can't), the gradient sky above
+  const PHOTO = {
+    tex: { value: null }, on: { value: 0 }, maxv: { value: 4 }, elev: { value: new THREE.Vector2(-10, 90) },
+    rot: { value: 0 }, meta: null,
+  };
+  function loadPhotoSky(done) {
+    fetch('assets/hd/sky.json').then(r => (r.ok ? r.json() : null)).then(meta => {
+      if (!meta) return;
+      new THREE.TextureLoader().load('assets/hd/sky.webp', tex => {
+        tex.encoding = THREE.sRGBEncoding;
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.generateMipmaps = false;                 // (always magnified; mips would show the seam)
+        tex.minFilter = tex.magFilter = THREE.LinearFilter;
+        PHOTO.meta = meta;
+        PHOTO.tex.value = tex; PHOTO.maxv.value = meta.maxv;
+        PHOTO.elev.value.set(meta.elev[0], meta.elev[1]);
+        PHOTO.on.value = 1;
+        done();
+      });
+    }).catch(() => {});
+  }
+  // the photo's column u faces the azimuth atan(z, x) = 2 pi (u - 0.5) - rot: turn it so its sun is the map's
+  function aimPhoto(dir) {
+    if (!PHOTO.meta) return;
+    PHOTO.rot.value = 2 * Math.PI * (PHOTO.meta.sunU - 0.5) - Math.atan2(dir.z, dir.x);
+  }
+
   function skyMaterial(colors, disk, gain = 1, clouds = 0) {
     return new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
@@ -105,6 +133,7 @@ const HD = (() => {
         disk: { value: disk },
         clouds: { value: clouds },
         time: { value: 0 },
+        photo: PHOTO.tex, photoOn: PHOTO.on, photoMaxv: PHOTO.maxv, photoE: PHOTO.elev, photoRot: PHOTO.rot,
       },
       vertexShader: `
         varying vec3 vDir;
@@ -115,6 +144,7 @@ const HD = (() => {
       fragmentShader: `
         uniform vec3 top, horizon, ground, sunDir, sunColor;
         uniform float disk, gain, clouds, time;
+        uniform sampler2D photo; uniform float photoOn, photoMaxv, photoRot; uniform vec2 photoE;
         varying vec3 vDir;
         float h2(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
         float vn(vec2 p) {
@@ -130,11 +160,21 @@ const HD = (() => {
           vec3 d = normalize(vDir);
           float h = d.y;
           vec3 c = mix(horizon, top, pow(clamp(h, 0.0, 1.0), 0.55));
-          c = mix(c, ground, smoothstep(0.0, -0.12, h));
           float s = max(dot(d, sunDir), 0.0);
           float above = smoothstep(-0.03, 0.02, h);
-          c += sunColor * above * (pow(s, 900.0) * 40.0 * disk + pow(s, 64.0) * 0.35 + pow(s, 6.0) * 0.12);
-          if (clouds > 0.0 && h > 0.0) {
+          if (photoOn > 0.5) {
+            // the photographed sky (make_sky.py), turned so its sun is where the map's sun is;
+            // it fades into the haze (the fog's colour) towards the horizon
+            float el = degrees(asin(clamp(h, -1.0, 1.0)));
+            float u = fract(0.5 + (atan(d.z, d.x) + photoRot) / 6.2831853);
+            vec3 p = texture2D(photo, vec2(u, clamp((el - photoE.x) / (photoE.y - photoE.x), 0.0, 1.0))).rgb * photoMaxv;
+            c = mix(p, horizon, (1.0 - smoothstep(0.0, 0.16, h)) * 0.85);
+            c += sunColor * above * pow(s, 900.0) * 40.0 * disk;
+          } else {
+            c += sunColor * above * (pow(s, 900.0) * 40.0 * disk + pow(s, 64.0) * 0.35 + pow(s, 6.0) * 0.12);
+          }
+          c = mix(c, ground, smoothstep(0.0, -0.12, h));
+          if (clouds > 0.0 && h > 0.0 && photoOn < 0.5) {
             // a cloud layer high up: fair-weather cumulus, drifting, lit from the sun's side
             vec2 p = d.xz / (h + 0.06) * 0.55 + vec2(time * 0.004, time * 0.0015);
             float n = fbm(p);
@@ -320,6 +360,7 @@ const HD = (() => {
     sky.material = skyMaterial(COLORS, 1, 1, 0.85);
     if (o.clouds && o.clouds.parent) o.clouds.parent.remove(o.clouds);    // (the sky draws its own clouds)
     sky.scale.setScalar(0.55);
+    loadPhotoSky(() => { if (envDone) { aimPhoto(sunDir); lightFromSky(); } });
     scene.background = new THREE.Color(COLORS.horizon);
     // a small copy of the sky (no sun disk: the sun light does the highlights) to light the scene,
     // dimmer than the real one (the sun + the fill light do most of the lighting)
@@ -329,7 +370,7 @@ const HD = (() => {
 
   // The sun: same direction as the map sets it, a bit lower in the sky (afternoon light: more
   // shape on the blocks, warmer, and you can see light shafts past the rooftops).
-  const SUN_ELEVATION = 45 * Math.PI / 180;
+  const SUN_ELEVATION = 48 * Math.PI / 180;           // (= the photographed sky's sun: make_sky.py)
   const sunDir = new THREE.Vector3();
   // Shadows follow you: the shadow map covers SHADOW_HALF metres around you (instead of the whole
   // map), so nearby shadows are about twice as sharp. Snapped to whole shadow texels, so the
@@ -352,6 +393,18 @@ const HD = (() => {
     sun.target.updateMatrixWorld();
   }
 
+  // the scene's reflections + sky light: a blurred copy of the (dimmer) sky
+  function lightFromSky() {
+    const s = new THREE.Scene();
+    s.add(envSky);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const env = pmrem.fromScene(s, 0.02).texture;
+    pmrem.dispose();
+    if (scene.environment) scene.environment.dispose();
+    scene.environment = env;
+    viewScene.environment = env;
+  }
+
   function makeEnv() {
     const d = sun.position.clone().sub(sun.target.position);
     const flat = new THREE.Vector3(d.x, 0, d.z).normalize();
@@ -363,13 +416,8 @@ const HD = (() => {
     const dir = sunDir;
     sky.material.uniforms.sunDir.value.copy(dir);
     envSky.material.uniforms.sunDir.value.copy(dir);
-    const s = new THREE.Scene();
-    s.add(envSky);
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const env = pmrem.fromScene(s, 0.02).texture;
-    pmrem.dispose();
-    scene.environment = env;
-    viewScene.environment = env;
+    aimPhoto(dir);
+    lightFromSky();
     envDone = true;
     if (typeof HDWorld !== 'undefined' && HDWorld) HDWorld.onEnv(sunDir);
   }

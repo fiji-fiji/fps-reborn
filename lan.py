@@ -35,7 +35,7 @@ host_gen = 0
 guests = {}                       # guest id -> {'q': Queue, 'gen': int}
 
 # Only the game's own files are served (not the rest of the folder).
-ALLOWED = re.compile(r'^/(index\.html|style\.css|js/[\w.-]+\.js|lib/[\w.-]+\.js|assets/hd/(?:mat/)?[\w.-]+\.(?:png|webp|json))?$')
+ALLOWED = re.compile(r'^/(index\.html|style\.css|js/[\w.-]+\.js|lib/[\w.-]+\.js|assets/hd/(?:mat/|char/)?[\w.-]+\.(?:png|webp|json|bin))?$')
 
 
 def lan_ip():

@@ -519,7 +519,7 @@ const HDDress = (() => {
           }
 
       // ================= trunks, palms, columns, bollards =================
-      const BARK = mat('bark', 0x9a8e74), BARK_PLANE = mat('bark', 0xb0a488), PALM = mat('bark', 0xb4a082);
+      const BARK = mat('bark', 0x9a8e74), BARK_PLANE = mat('bark', 0xb0a488), PALM = mat('palmbark', 0xb4a082);
       for (const t of trunks) {
         const cx = t.x + 0.5, cz = t.z + 0.5, small = t.h <= 3;
         const rb = small ? 0.13 : 0.24, rt = small ? 0.1 : 0.18;

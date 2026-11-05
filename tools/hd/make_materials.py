@@ -5,7 +5,10 @@
 # true size: bricks are 25 cm long, cobbles 20 cm, a stone course 50 cm high... and each picture
 # covers 1-2 metres before it repeats, so the block grid never shows.
 #
-# Everything is generated here from noise and simple shapes (no image files needed), at 1024 x 1024:
+# Most are photoscans from Poly Haven (CC0), downloaded once with fetch_polyhaven.py and resized
+# here; the rest (Barcelona's flower tiles, Gaudi's hexagons and mosaic, glass, shutters, zinc...)
+# are generated from noise and simple shapes. Without the downloads, everything is generated.
+# Each material, at 1024 x 1024:
 #   <name>_a.webp   colour (sRGB). Neutral where the game tints it (one plaster for every wall colour)
 #   <name>_n.webp   R G = surface direction (tangent-space normal), B = height (for the parallax effect)
 #   <name>_r.webp   R = roughness, G = tint mask (1 = takes the block's colour), B = cavity (crevices)
@@ -35,6 +38,7 @@ args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 ONLY = None
 PREVIEW = None
 NO_SAVE = '--no-save' in args
+NO_SCANS = '--no-scans' in args          # ignore the downloaded scans (generated materials only)
 for i, a in enumerate(args):
     if a == '--only':
         ONLY = set(args[i + 1].split(','))
@@ -588,6 +592,12 @@ def bark(rng):
     return P, alb, h, rough, 0.8, 0
 
 
+@material('palmbark')
+def palmbark(rng):
+    """Palm trunk (used when the scan isn't downloaded): the bark texture."""
+    return bark(rng)
+
+
 @material('paint')
 def paint(rng):
     """Painted metal / wood (railings, posts, shopfronts): smooth gloss paint, faint brush
@@ -729,6 +739,63 @@ def sandstone(rng):
 
 
 # ---------------------------------------------------------------------------------------------
+# Photoscanned materials (Poly Haven, CC0), downloaded by fetch_polyhaven.py into tools/hd/cache/.
+# Each keeps its real size. tint: how much the block's colour applies (1 = all of it: the scan's
+# average becomes the block's colour, its natural variation kept); desat: take the colour out
+# first; depth: how deep its relief really is (metres, for the parallax). Without the cache, the
+# generated versions above are used instead.
+# ---------------------------------------------------------------------------------------------
+SCAN_CFG = {
+    'plaster':   dict(tint=1.0, desat=0.8, depth=0.003),
+    'render':    dict(tint=1.0, desat=0.6, depth=0.012),
+    'ashlar':    dict(tint=0.9, desat=0.7, depth=0.02),
+    'rubble':    dict(tint=0.6, desat=0.4, depth=0.04),
+    'brick':     dict(tint=0.0, desat=0.0, depth=0.015),
+    'cobble':    dict(tint=0.5, desat=0.3, depth=0.025),
+    'slabs':     dict(tint=0.8, desat=0.6, depth=0.008),
+    'rasilla':   dict(tint=0.0, desat=0.0, depth=0.008),
+    'planks':    dict(tint=0.0, desat=0.0, depth=0.01),
+    'gravel':    dict(tint=0.5, desat=0.3, depth=0.015),
+    'grass':     dict(tint=0.5, desat=0.0, depth=0.02),
+    'dirt':      dict(tint=0.6, desat=0.2, depth=0.02),
+    'bark':      dict(tint=0.6, desat=0.3, depth=0.02),
+    'palmbark':  dict(tint=0.4, desat=0.2, depth=0.025),
+    'concrete':  dict(tint=0.9, desat=0.8, depth=0.004),
+    'sandstone': dict(tint=0.9, desat=0.5, depth=0.015),
+}
+CACHE = os.path.join(HERE, 'cache')
+SCANS = json.load(open(os.path.join(CACHE, 'scans.json'))) if os.path.exists(os.path.join(CACHE, 'scans.json')) else {}
+
+
+def load_map(path, gray=False):
+    """An image from the cache as floats 0..1, N x N, rows bottom-up (= our v), raw values."""
+    import bpy
+    img = bpy.data.images.load(path)
+    img.colorspace_settings.name = 'Non-Color'
+    if img.size[0] != N or img.size[1] != N:
+        img.scale(N, N)
+    px = np.array(img.pixels[:], np.float32).reshape(N, N, 4)
+    bpy.data.images.remove(img)
+    return px[..., 0] if gray else px[..., :3]
+
+
+def scan_material(name):
+    info, cfg = SCANS[name], SCAN_CFG[name]
+    d = os.path.join(CACHE, info['asset'])
+    path = lambda k: next((os.path.join(d, f) for f in os.listdir(d) if f.startswith(k + '.')), None)
+    P = (info['size_m'][0], info['size_m'][1])
+    alb = load_map(path('diff')) * 255.0
+    if cfg['desat']:
+        l = alb @ np.array([0.299, 0.587, 0.114])
+        alb = alb + (l[..., None] - alb) * cfg['desat']
+    disp = load_map(path('disp'), gray=True) if path('disp') else np.zeros((N, N))
+    h = (disp - disp.mean()) * cfg['depth']
+    rough = load_map(path('rough'), gray=True) if path('rough') else np.full((N, N), 0.8)
+    nrm = load_map(path('nor')) * 2 - 1 if path('nor') else None
+    return P, alb, h, rough, cfg['tint'], 0, nrm
+
+
+# ---------------------------------------------------------------------------------------------
 # Derived maps and output
 # ---------------------------------------------------------------------------------------------
 def normals(h, P):
@@ -779,11 +846,19 @@ def main():
         if ONLY and name not in ONLY:
             continue
         rng = np.random.default_rng(4000 + idx * 17)
-        P, alb, h, rough, tint, metal = fn(rng)
-        h = np.asarray(h, float)
-        nrm = normals(h, P)
-        cav = cavity(h, P)
-        alb = np.clip(alb, 0, 255) * (0.55 + 0.45 * cav)[..., None]      # crevices are darker
+        source = 'generated'
+        if name in SCANS and name in SCAN_CFG and not NO_SCANS:
+            P, alb, h, rough, tint, metal, nrm = scan_material(name)
+            source = 'Poly Haven: ' + SCANS[name]['asset']
+            h = np.asarray(h, float)
+            cav = cavity(h, P)
+            alb = np.clip(alb, 0, 255) * (0.85 + 0.15 * cav)[..., None]  # (the photo already has its shading)
+        else:
+            P, alb, h, rough, tint, metal = fn(rng)
+            h = np.asarray(h, float)
+            nrm = normals(h, P)
+            cav = cavity(h, P)
+            alb = np.clip(alb, 0, 255) * (0.55 + 0.45 * cav)[..., None]  # crevices are darker
         tint = np.broadcast_to(np.asarray(tint, float), (N, N))
         rough = np.clip(np.broadcast_to(np.asarray(rough, float), (N, N)), 0.02, 1)
         lo, hi = float(h.min()), float(h.max())
@@ -793,7 +868,7 @@ def main():
         wts = tint.ravel() + 1e-6
         mean = (lin.reshape(-1, 3) * wts[:, None]).sum(0) / wts.sum()
         avg = lin.reshape(-1, 3).mean(0)
-        manifest[name] = dict(period=[round(P[0], 4), round(P[1], 4)], depth=round(hi - lo, 5), metal=metal,
+        manifest[name] = dict(period=[round(P[0], 4), round(P[1], 4)], depth=round(hi - lo, 5), metal=metal, source=source,
                               tintMean=[round(float(v), 4) for v in mean], avg=[round(float(v), 4) for v in avg])
         if not NO_SAVE:
             save_webp(os.path.join(OUT, f'{name}_a.webp'), to8(alb), 90)
