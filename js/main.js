@@ -21,7 +21,8 @@
   scene.background = new THREE.Color(HORIZON);
   scene.fog = CLEAN ? new THREE.Fog(HORIZON, 45, 175) : new THREE.Fog(HORIZON, 70, 190);   // clean: bright white haze
   // soft light from the sky above + warm bounce from the sand below
-  scene.add(CLEAN ? new THREE.HemisphereLight(0xf2f6ff, 0x9a9aac, 1.0) : new THREE.HemisphereLight(0xe3f2ff, 0xd8c29a, 0.62));
+  const hemi = CLEAN ? new THREE.HemisphereLight(0xf2f6ff, 0x9a9aac, 1.0) : new THREE.HemisphereLight(0xe3f2ff, 0xd8c29a, 0.62);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff0d6, CLEAN ? 0.38 : 0.62);   // warm sunlight that casts shadows
   scene.add(sun, sun.target);
   sun.castShadow = !CLEAN;                                  // clean: no hard shadows
@@ -68,10 +69,12 @@
   const viewScene = new THREE.Scene();
   const viewCamera = new THREE.PerspectiveCamera(60, 1, 0.01, 10);
   viewScene.add(viewCamera);
-  viewScene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const vAmb = new THREE.AmbientLight(0xffffff, 0.6);
   const vSun = new THREE.DirectionalLight(0xffffff, 0.6);
   vSun.position.set(0.3, 1, 0.5);
-  viewScene.add(vSun);
+  viewScene.add(vAmb, vSun);
+  // HD look (hd.js): Blender-baked blocks, realistic materials, sky lighting, post-processing
+  if (HD.on) HD.setup({ renderer, scene, viewScene, sun, hemi, sky, clouds, viewLights: [vAmb, vSun] });
 
   // --- settings from the address bar ---
   const params = new URLSearchParams(location.search);
@@ -130,7 +133,14 @@
   const mapDef = MAPS[MAP_ID];
   const world = new World(...mapDef.size);
   const mapInfo = mapDef.build(world);
-  scene.add(world.buildMesh());
+  // HD: the world drawn with real materials and bounce light (hdworld.js); otherwise the blocks
+  let worldMesh = null;
+  if (HD.on && HDWorld) { await HDWorld.ready(); worldMesh = HDWorld.build(world); }
+  if (!worldMesh) {
+    worldMesh = world.buildMesh();
+    if (HD.on) HD.world(worldMesh);
+  }
+  scene.add(worldMesh);
   if (mapInfo.decor) buildDecor(scene, mapInfo.decor);
   {
     const cx = world.sx / 2, cz = world.sz / 2, half = Math.max(world.sx, world.sz) * 0.75;
@@ -523,6 +533,7 @@
     camera.aspect = viewCamera.aspect = w / h;
     camera.updateProjectionMatrix();
     viewCamera.updateProjectionMatrix();
+    if (HD.on) HD.resize();
   }
   window.addEventListener('resize', resize);
   resize();
@@ -587,10 +598,13 @@
     clouds.position.x = Math.sin(now / 60000) * 30;
     clouds.position.z = (now / 400) % 80 - 40;
 
-    renderer.clear();
-    renderer.render(scene, camera);
-    renderer.clearDepth();
-    renderer.render(viewScene, viewCamera);
+    if (HD.on) HD.render(camera, viewCamera);
+    else {
+      renderer.clear();
+      renderer.render(scene, camera);
+      renderer.clearDepth();
+      renderer.render(viewScene, viewCamera);
+    }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

@@ -59,6 +59,7 @@ function buildDecor(scene, list) {
         break;
       }
       case 'tree': {
+        if (HD.on && HD.crown(root, 'tree', d.x, d.y, d.z, rng)) break;   // HD: a Blender-made canopy
         // a round leafy crown made of a few chunky balls
         const n = 4 + Math.floor(rng() * 2);
         for (let i = 0; i < n; i++) {
@@ -97,6 +98,7 @@ function buildDecor(scene, list) {
       }
       case 'orange': {
         // a small round orange tree crown, dotted with oranges
+        if (!(HD.on && HD.crown(root, 'orange', d.x, d.y, d.z, rng)))      // HD: a Blender-made canopy
         for (let i = 0; i < 3; i++) {
           const r = 0.9 + rng() * 0.35, a = rng() * Math.PI * 2, off = i === 0 ? 0 : 0.6;
           add(new THREE.IcosahedronGeometry(r, 1), M.leaves[i % 3], d.x + Math.cos(a) * off, d.y + 1.1 + rng() * 0.4, d.z + Math.sin(a) * off);
@@ -122,7 +124,8 @@ function buildDecor(scene, list) {
       }
       case 'sea': {
         // the sea, stretching away to the horizon
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(d.w, d.d), M.sea);
+        const hdSea = HD.on && typeof HDWorld !== 'undefined' && HDWorld && HDWorld.seaMaterial;   // HD: real water
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(d.w, d.d), hdSea ? HDWorld.seaMaterial(d) : M.sea);
         m.rotation.x = -Math.PI / 2;
         m.position.set(d.x, d.y, d.z);
         root.add(m);

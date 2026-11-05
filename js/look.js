@@ -4,6 +4,8 @@
 //   clean   — no textures: every surface becomes its own soft flat colour, each block face
 //             a hair lighter or darker than its neighbours (a gentle patchwork), bright white
 //             fog, a pale sky, no hard shadows. Characters pop out clearly against it.
+//   hd      — the same world drawn as a real place: real materials, architecture, bounce light,
+//             a proper sky and post-processing (hd.js, hdworld.js, hddress.js)
 //
 // Nothing is rebuilt for the clean look: Look.flatten() goes over what's in a scene and swaps
 // each texture for its average colour (it's run again now and then for things made later).
@@ -17,7 +19,7 @@ const Look = {
     let saved = '';
     try { saved = localStorage.getItem('fps.look') || ''; } catch (e) {}
     const v = fromUrl || saved;
-    this.name = v === 'clean' ? 'clean' : 'classic';
+    this.name = v === 'clean' || v === 'hd' ? v : 'classic';
     return this.name;
   },
   save(name) { try { localStorage.setItem('fps.look', name); } catch (e) {} },

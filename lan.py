@@ -35,7 +35,7 @@ host_gen = 0
 guests = {}                       # guest id -> {'q': Queue, 'gen': int}
 
 # Only the game's own files are served (not the rest of the folder).
-ALLOWED = re.compile(r'^/(index\.html|style\.css|js/[\w.-]+\.js|lib/[\w.-]+\.js)?$')
+ALLOWED = re.compile(r'^/(index\.html|style\.css|js/[\w.-]+\.js|lib/[\w.-]+\.js|assets/hd/(?:mat/)?[\w.-]+\.(?:png|webp|json))?$')
 
 
 def lan_ip():
@@ -75,6 +75,8 @@ def for_guest(raw, data, gid):
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    extensions_map = dict(http.server.SimpleHTTPRequestHandler.extensions_map, **{'.webp': 'image/webp'})
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=ROOT, **kwargs)
 

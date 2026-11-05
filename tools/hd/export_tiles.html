@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Exports the game's 16x16 block designs (from js/textures.js) for the HD bake (bake_textures.py).
+     Needs a local web server (browsers block this from file://). From the repo folder:
+         py -3 -m http.server 8123          (Mac: python3 -m http.server 8123)
+     then open http://localhost:8123/tools/hd/export_tiles.html, click both buttons,
+     and put tiles_clean.json + tiles_noisy.json in tools/hd/ (replacing the old ones). -->
+<html><head><meta charset="utf-8"><title>Export block designs</title>
+<style>body{font:15px sans-serif;margin:2rem;max-width:40rem} button{font-size:15px;margin:.3rem .3rem .3rem 0;padding:.4rem .8rem} img{image-rendering:pixelated;width:512px;border:1px solid #ccc;margin-top:1rem}</style>
+</head><body>
+<h2>Export block designs for the HD bake</h2>
+<p>Two versions: without the noise (the shapes) and with the game's own gentle noise (the colour variation).</p>
+<div id="btns">Loading…</div>
+<img id="preview" alt="">
+<script src="../../lib/three.min.js"></script>
+<script>
+(async () => {
+  const src = await (await fetch('../../js/textures.js', { cache: 'no-store' })).text();
+  const build = noise => {
+    // the designs at 1:1 (16px, no padding), with the chosen amount of noise
+    const code = src
+      .replace(/^const TEX_SCALE = \d+;/m, 'const TEX_SCALE = 1;')
+      .replace(/^const TEX_GUTTER = \d+;/m, 'const TEX_GUTTER = 0;')
+      .replace(/^const TEX_NOISE = [\d.]+;/m, `const TEX_NOISE = ${noise};`);
+    const T = new Function(code + '\nreturn { Textures, TEX_CELL, ATLAS_SIZE };')();
+    const names = Object.keys(T.Textures.tiles).sort((a, b) => T.Textures.tiles[a].index - T.Textures.tiles[b].index);
+    return { names, cell: T.TEX_CELL, atlas: T.ATLAS_SIZE, png: T.Textures.atlas.image.toDataURL('image/png') };
+  };
+  const noisy = Number((src.match(/^const TEX_NOISE = ([\d.]+);/m) || [])[1] || 0.35);
+  const btns = document.getElementById('btns');
+  btns.textContent = '';
+  for (const [file, n] of [['tiles_clean.json', 0], ['tiles_noisy.json', noisy]]) {
+    const data = build(n);
+    const b = document.createElement('button');
+    b.textContent = `Download ${file} (${data.names.length} designs)`;
+    b.onclick = () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+      a.download = file; a.click();
+    };
+    btns.appendChild(b);
+    if (n === 0) document.getElementById('preview').src = data.png;
+  }
+})().catch(e => { document.getElementById('btns').textContent = 'Failed: ' + e + ' (open this through a local web server, see the comment at the top)'; });
+</script>
+</body></html>
