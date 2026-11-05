@@ -341,11 +341,6 @@ class NetHost {
     this.guests = new Map(game.remotes.map(r => [r.netId, r]));   // every friend, by id
     const g = game, m = g.mode;
     // what the friend needs to see happen
-    const arrowsFire = g.arrows.fire.bind(g.arrows);
-    g.arrows.fire = (owner, pos, dir, def, charge) => {
-      arrowsFire(owner, pos, dir, def, charge);
-      this.event({ t: 'arrow', o: owner.netId, a: v3(pos), d: v3(dir), k: def.key, c: charge });
-    };
     const nadeThrow = g.throwables.throw.bind(g.throwables);
     g.throwables.throw = (owner, kind, pos, vel) => {
       nadeThrow(owner, kind, pos, vel);
@@ -397,7 +392,6 @@ class NetHost {
           break;
         }
         case 'melee': g.melee(r, V(ev.eye), V(ev.dir).normalize(), WEAPONS.knife); Sound.at(r.pos, 'swish', g._volumeAt(r.pos)); break;
-        case 'arrow': if (WEAPONS[ev.k]) g.arrows.fire(r, V(ev.a), V(ev.d).normalize(), WEAPONS[ev.k], ev.c); break;
         case 'nade': if (r.nades[ev.k] > 0) { g.throwables.throw(r, ev.k, V(ev.a), V(ev.v)); r.nades[ev.k]--; } break;
         case 'reload': Sound.at(r.pos, 'reloadFar', g._volumeAt(r.pos)); g.reloadHeard(r); break;
         case 'buy': g.buy(r, ev.k); break;
@@ -470,11 +464,6 @@ class NetGuest {
     g.melee = (att, eye, dir) => { if (att.isPlayer) this.out({ t: 'melee', eye: v3(eye), dir: v3(dir) }); return false; };
     g.reloadHeard = e => { if (e.isPlayer) this.out({ t: 'reload' }); };
     g.shotHeard = () => {};
-    const arrowsFire = g.arrows.fire.bind(g.arrows);
-    g.arrows.fire = (owner, pos, dir, def, charge) => {
-      arrowsFire(owner, pos, dir, def, charge);
-      if (owner.isPlayer) this.out({ t: 'arrow', a: v3(pos), d: v3(dir), k: def.key, c: charge });
-    };
     const nadeThrow = g.throwables.throw.bind(g.throwables);
     g.throwables.throw = (owner, kind, pos, vel) => {
       nadeThrow(owner, kind, pos, vel);
@@ -527,7 +516,6 @@ class NetGuest {
         if (vic && (vic.alive || vic === me)) { vic.alive = true; g.pop(vic, this._ent(ev.a), ev.p, ev.w, true); }
         break;
       }
-      case 'arrow': { const o = this._ent(ev.o); if (o && o !== me && WEAPONS[ev.k]) g.arrows.fire(o, V(ev.a), V(ev.d), WEAPONS[ev.k], ev.c); break; }
       case 'nade': { const o = this._ent(ev.o); if (o && o !== me) g.throwables.throw(o, ev.k, V(ev.a), V(ev.v)); break; }
       case 'bloom': g.mode.boo.bloom(); Sound.bloom(); break;
       case 'uproot': g.mode.boo.uproot(ev.y); g.mode.saw.finish(); Sound.at(g.mode.boo.pos, 'timber', 0.4 + 0.6 * g._volumeAt(g.mode.boo.pos)); break;
@@ -601,7 +589,7 @@ class NetGuest {
       this.lastRound = sm.r;
       m.round = sm.r;
       m.attackTeam = sm.at;
-      if (!first) { b.reset(); m.plantAnim.cancel(); m.saw.cancel(); g.throwables.clear(); g.arrows.clear(); }
+      if (!first) { b.reset(); m.plantAnim.cancel(); m.saw.cancel(); g.throwables.clear(); }
       this.planter = this.defuser = null;
       refillLoadout(me);
       const mySide = m.sideOf(g.playerTeam), R = m.rules;
@@ -716,7 +704,6 @@ class NetGuest {
       if (e.model.setAction) e.model.setAction(m.planter === e ? 'plant' : m.defuser === e ? 'saw' : null, g.time, m.boo && m.boo.pos);
       g.footsteps(e, dt);
     }
-    g.arrows.update(dt);
     g.throwables.update(dt);
     for (const it of g.drops.items) {           // dropped blasters hover and turn
       it.age += dt;

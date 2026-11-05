@@ -217,12 +217,6 @@ kbd {
 #moneyGain { color: var(--mint); margin-left: .4rem; opacity: 0; }
 
 /* bow pull meter (under the crosshair) */
-#drawBar {
-  position: absolute; left: 50%; top: calc(50% + 2rem); transform: translateX(-50%);
-  width: 6rem; height: .5rem; border-radius: 1rem; overflow: hidden; display: none;
-  background: rgba(0,0,0,.5); border: .1rem solid rgba(255,255,255,.6);
-}
-#drawFill { height: 100%; width: 0; background: var(--pink); }
 
 /* Lily zoom: dark ring around a clear circle + thin cross */
 #scope {
@@ -288,6 +282,17 @@ kbd {
 #shop .card { align-items: center; text-align: center; }
 #shop .shopGrid { grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); }
 #shopNext { font-size: .95rem; color: var(--mint); }
+/* shop board: sidearms | main blasters | snipers + shields, then a row of grenades under all three.
+   The columns share one height, so each column's cards stretch to line up top and bottom. */
+#shop .shopPanel { width: min(52rem, calc(100vw - 2rem)); }
+#shop .shopBoard { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 1rem; align-items: stretch; }
+#shop .shopCol { display: flex; flex-direction: column; }
+#shop .shopCol .shopGrid { flex: 1; grid-template-columns: 1fr; grid-auto-rows: 1fr; }
+#shop .shopRow { grid-column: 1 / -1; }
+#shop .shopRow .shopGrid { grid-template-columns: repeat(3, 1fr); column-gap: 1rem; }
+#shop .shopBoard .card { justify-content: center; }
+#shop .shopBoard .card .icon { height: 2.4rem; }
+@media (max-width: 40rem) { #shop .shopBoard { grid-template-columns: 1fr; } #shop .shopRow { grid-column: auto; } }
 .shopSection { font-size: .85rem; color: #aaa; letter-spacing: .08em; margin: .9rem 0 .4rem; }
 .shopFoot { margin-top: .9rem; font-size: .95rem; color: #ddd; text-align: center; }
 
@@ -309,12 +314,6 @@ kbd {
 }
 .panel h1 { font-size: 2.4rem; letter-spacing: .1em; color: var(--mint); text-shadow: 0 .2rem 0 #000; }
 .panel .sub { color: #bbb; margin: .3rem 0 1rem; font-size: .95rem; }
-.howto {
-  text-align: left; background: rgba(255,255,255,.05); border-radius: .8rem;
-  padding: .8rem 1rem; margin-bottom: 1rem; font-size: .95rem; line-height: 1.5;
-}
-.howto h3 { font-size: 1rem; color: var(--mint); margin-bottom: .3rem; }
-.howto li { margin-left: 1.1rem; }
 .pickLabel { text-align: left; font-size: .8rem; color: #999; margin: .3rem 0 .3rem; letter-spacing: .08em; }
 .pick { display: flex; gap: .5rem; margin-bottom: .5rem; }
 .pick button {
@@ -333,6 +332,35 @@ kbd {
   padding: .7rem 1.5rem; cursor: pointer; width: 100%;
 }
 #playBtn:hover { background: #aaffe4; }
+#homeBtn {
+  margin-top: .5rem; width: 100%;
+  font-family: inherit; font-size: .95rem;
+  background: none; color: #aaa;
+  border: .15rem solid #3a4150; border-radius: .6rem; padding: .4rem; cursor: pointer;
+}
+#homeBtn:hover { color: var(--mint); border-color: var(--mint); }
+
+/* ---------- First screen: practice range or the real game ---------- */
+#launcher {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: #10141a;
+}
+#launcher.hidden { display: none; }
+.launchPicks { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; margin-top: .4rem; }
+@media (max-width: 34rem) { .launchPicks { grid-template-columns: 1fr; } }
+.launchBtn {
+  display: flex; flex-direction: column; align-items: center; gap: .4rem;
+  font-family: inherit; color: #ddd; text-align: center;
+  background: #2a303c; border: .2rem solid #3a4150; border-bottom-width: .35rem;
+  border-radius: 1rem; padding: 1.1rem .9rem; cursor: pointer;
+}
+.launchBtn:hover { border-color: var(--mint); }
+.launchBtn.range:hover { border-color: var(--gold); }
+.launchIcon { font-size: 2.6rem; line-height: 1; }
+.launchName { font-size: 1.35rem; color: var(--mint); }
+.launchBtn.range .launchName { color: var(--gold); }
+.launchText { font-size: .9rem; color: #aaa; line-height: 1.35; }
 .setting { margin: 1rem 0 .6rem; text-align: left; }
 .setting label { display: block; margin-bottom: .3rem; color: #ddd; }
 .setting input { width: 100%; }
@@ -387,7 +415,7 @@ body.shopping #hud { display: none; }
 .feedRow { display: flex; align-items: center; gap: .1rem; }
 .wicon.money { filter: drop-shadow(0 .06rem 0 rgba(0,0,0,.6)); vertical-align: -0.12em; }
 .wicon { image-rendering: pixelated; vertical-align: middle; filter: drop-shadow(0 .08rem 0 rgba(0,0,0,.7)); }
-.headIcon { color: var(--gold); margin-left: .3rem; }
+.headIcon { width: 1.05em; height: 1.05em; margin-left: .3rem; vertical-align: -0.15em; filter: drop-shadow(0 .08em 0 rgba(0,0,0,.6)); }
 
 /* scoreboard: each player's own colour (same as the flower on their hat) */
 .pdot { display: inline-block; width: 0.7em; height: 0.7em; border-radius: 50%; margin-right: 0.45em; vertical-align: 0.05em; box-shadow: 0 0 0 2px rgba(0,0,0,.35); }

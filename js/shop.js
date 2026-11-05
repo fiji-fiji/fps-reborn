@@ -1,5 +1,6 @@
 // The shop window: big cards for each blaster and shield, plain-words descriptions,
-// simple Power / Speed / Range bars, greyed out when you can't afford it.
+// simple Power / Speed / Range bars, greyed out when you can't afford it. Three columns on
+// top: sidearms on the left, main blasters in the middle, snipers on the right.
 // Open with B during the buy phase (or any time in the practice garden).
 
 class ShopUI {
@@ -10,6 +11,8 @@ class ShopUI {
     this.isOpen = false;
     this.root = document.getElementById('shop');
     this.grid = document.getElementById('shopGrid');
+    this.side = document.getElementById('shopSide');
+    this.snipers = document.getElementById('shopSnipers');
     this.shields = document.getElementById('shopShields');
     this.moneyEl = document.getElementById('shopMoney');
     this.timerEl = document.getElementById('shopTimer');
@@ -76,6 +79,16 @@ class ShopUI {
     for (const key of SHOP_ORDER) {
       const def = WEAPONS[key];
       this.grid.appendChild(this._card(key, def, me.guns.main && me.guns.main.def === def));
+    }
+    this.snipers.innerHTML = '';
+    for (const key of SNIPER_ORDER) {
+      const def = WEAPONS[key];
+      this.snipers.appendChild(this._card(key, def, me.guns.main && me.guns.main.def === def));
+    }
+    this.side.innerHTML = '';
+    for (const key of SIDE_ORDER) {
+      const def = WEAPONS[key];
+      this.side.appendChild(this._card(key, def, me.guns.side && me.guns.side.def === def));
     }
     this.shields.innerHTML = '';
     for (const s of Object.values(SHIELDS)) {

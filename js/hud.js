@@ -10,6 +10,12 @@ const fmtMoney = n => n.toLocaleString('en-US');
 // 0xRRGGBB -> '#rrggbb'
 const cssHex = n => '#' + n.toString(16).padStart(6, '0');
 
+// a classic bullseye (red and white rings) — a head hit, in the pop feed
+const BULLSEYE = '<svg class="headIcon" viewBox="0 0 20 20" aria-label="head hit">' +
+  '<circle cx="10" cy="10" r="9.5" fill="#ff3b3b"/><circle cx="10" cy="10" r="7" fill="#fff"/>' +
+  '<circle cx="10" cy="10" r="4.6" fill="#ff3b3b"/><circle cx="10" cy="10" r="2.2" fill="#fff"/>' +
+  '<circle cx="10" cy="10" r="1" fill="#ff3b3b"/></svg>';
+
 const HUD = {
   init(game) {
     this.game = game;
@@ -25,7 +31,7 @@ const HUD = {
       money: $('money'), moneyNum: $('moneyNum'), moneyGain: $('moneyGain'),
       ammo: $('ammo'), reserve: $('reserve'), weaponName: $('weaponName'),
       reloadBar: $('reloadBar'), reloadFill: $('reloadFill'), slots: $('slots'),
-      drawBar: $('drawBar'), drawFill: $('drawFill'), scope: $('scope'), crosshair: $('crosshair'),
+      scope: $('scope'), crosshair: $('crosshair'),
       score: $('score'), scoreA: $('scoreA'), scoreB: $('scoreB'), roleA: $('roleA'), roleB: $('roleB'),
       timer: $('timer'), roundNo: $('roundNo'), aliveA: $('aliveA'), aliveB: $('aliveB'),
       banner: $('banner'), bannerTitle: $('bannerTitle'), bannerSub: $('bannerSub'),
@@ -78,14 +84,14 @@ const HUD = {
     this.el.hurtDir.style.opacity = 1;
   },
 
-  // "Pip [blaster icon] ✦ Kiki" — ✦ means it was a head hit.
+  // "Pip [blaster icon] (bullseye) Kiki" — the bullseye means it was a head hit.
   feed(attacker, victim, head, weapon) {
     const row = document.createElement('div');
     row.className = 'feedRow';
     const name = e => `<span style="color:${TEAM_CSS[e.team]}">${e.name}</span>`;
     const who = attacker ? name(attacker) : '<span style="color:#7fffd4">The tree</span>';
     const icon = WeaponIcons.html(weapon || (attacker ? 'bloom' : 'tree'));
-    row.innerHTML = `${who} <span class="pop">${icon}${head ? '<b class="headIcon">✦</b>' : ''}</span> ${name(victim)}`;
+    row.innerHTML = `${who} <span class="pop">${icon}${head ? BULLSEYE : ''}</span> ${name(victim)}`;
     this.el.feed.prepend(row);
     while (this.el.feed.children.length > 5) this.el.feed.lastChild.remove();
     setTimeout(() => row.remove(), 6000);
@@ -281,7 +287,7 @@ const HUD = {
       this.el.ammo.textContent = gun.ammo;
       this.el.reserve.textContent = gun.reserve;
       this.el.weaponName.textContent = gun.def.name;
-      this.el.ammoLabel.textContent = gun.def.bow ? 'ARROWS' : 'BUBBLES';
+      this.el.ammoLabel.textContent = 'BUBBLES';
     }
     const reloading = gun.reloading > 0;
     this.el.reloadBar.style.visibility = reloading ? 'visible' : 'hidden';
@@ -295,11 +301,8 @@ const HUD = {
       + (nadeText ? `<div class="slot${me.slot === 'nade' ? ' on' : ''}">${keysToHtml('[5]')} ${nadeText}</div>` : '');
     if (slotsHtml !== this._lastSlots) { this.el.slots.innerHTML = slotsHtml; this._lastSlots = slotsHtml; }
 
-    // bow pull meter + sniper zoom
+    // sniper zoom
     if (holdingNade || me.slot === 'seed' || me.slot === 'knife') this.el.reloadBar.style.visibility = 'hidden';
-    const drawing = !holdingNade && me.slot !== 'seed' && gun.def.bow && gun.drawTime > 0;
-    this.el.drawBar.style.display = drawing ? 'block' : 'none';
-    if (drawing) this.el.drawFill.style.width = `${gun.charge * 100}%`;
     this.el.scope.style.display = view.scoped ? 'block' : 'none';
     this.el.crosshair.style.display = view.scoped ? 'none' : 'block';
   },

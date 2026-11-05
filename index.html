@@ -51,7 +51,6 @@
     </div>
     <div id="dmgText"></div>
     <div id="headStar">✦</div>
-    <div id="drawBar"><div id="drawFill"></div></div>
 
     <div id="action"><div id="actionLabel"></div><div class="bar"><div id="actionFill"></div></div></div>
     <div id="hint"></div>
@@ -81,14 +80,39 @@
         <h2>🛒 Shop</h2>
         <div><div id="shopMoney"></div><div id="shopNext"></div><div id="shopTimer"></div></div>
       </div>
-      <div class="shopSection">BLASTERS (you also always have the free Dandelion)</div>
-      <div class="shopGrid" id="shopGrid"></div>
-      <div class="shopSection">SHIELDS (extra protection on top of your health)</div>
-      <div class="shopGrid" id="shopShields"></div>
-      <div class="shopSection">UTILITY (press <kbd>5</kbd> to hold one, <kbd>Click</kbd> to throw far, <kbd>Right-click</kbd> to throw short)</div>
-      <div class="shopGrid" id="shopUtility"></div>
-      <div class="shopFoot">Click a card to buy it. Changed your mind? Right-click it to sell it back.
-        <br><button id="shopDone" class="pickBtn">Done <kbd>B</kbd></button></div>
+      <div class="shopBoard">
+        <div class="shopCol"><div class="shopSection">SIDEARMS</div>
+          <div class="shopGrid" id="shopSide"></div></div>
+        <div class="shopCol"><div class="shopSection">MAIN BLASTERS</div>
+          <div class="shopGrid" id="shopGrid"></div></div>
+        <div class="shopCol"><div class="shopSection">SNIPERS</div>
+          <div class="shopGrid" id="shopSnipers"></div>
+          <div class="shopSection">SHIELDS</div>
+          <div class="shopGrid" id="shopShields"></div></div>
+        <div class="shopRow"><div class="shopSection">UTILITY</div>
+          <div class="shopGrid" id="shopUtility"></div></div>
+      </div>
+      <div class="shopFoot"><button id="shopDone" class="pickBtn">Done <kbd>B</kbd></button></div>
+    </div>
+  </div>
+
+  <!-- First screen: practice range or the real game (skipped once you've picked) -->
+  <div id="launcher" class="hidden">
+    <div class="panel">
+      <h1>FPS REBORN</h1>
+      <div class="sub">What are we doing today?</div>
+      <div class="launchPicks">
+        <button id="goRange" class="launchBtn range">
+          <span class="launchIcon">🎯</span>
+          <span class="launchName">Practice Range</span>
+          <span class="launchText">Cheats on: unlimited bubbles, grenades and blasters, and nothing can pop you. For trying things out.</span>
+        </button>
+        <button id="goGame" class="launchBtn">
+          <span class="launchIcon">🐶</span>
+          <span class="launchName">The Real Game</span>
+          <span class="launchText">5v5 against the cats: rounds, the shop, planting the seed. Pick your map and bots next.</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -97,17 +121,6 @@
     <div class="panel">
       <h1>FPS REBORN</h1>
       <div class="sub" id="menuSub"></div>
-
-      <div class="howto">
-        <h3>How to play</h3>
-        <ul>
-          <li>You're a fluffy dog on the <b style="color:#5aa8ff">blue team</b>. Pop the <b style="color:#ff5a5a">red team</b> of cats with bubbles!</li>
-          <li><b>Attacking:</b> carry the seed to site <b>A</b> or <b>B</b> and hold <kbd>4</kbd> to plant it.</li>
-          <li><b>Defending:</b> stop them, or hold <kbd>4</kbd> next to their tree to uproot it.</li>
-          <li>Win rounds to earn doggy bank notes, then press <kbd>B</kbd> at the start of a round to shop.</li>
-          <li>First team to <b>13 rounds</b> wins (<b>5</b> in Swiftplay). Follow the floating labels if you're lost!</li>
-        </ul>
-      </div>
 
       <div id="lanBox" style="display:none"></div>
       <div class="pickLabel">MAP</div>
@@ -137,6 +150,7 @@
         </div>
       </div>
       <button id="playBtn">CLICK TO PLAY</button>
+      <button id="homeBtn">&#9664; Practice Range / Real Game</button>
       <div class="setting">
         <label for="sens">Mouse sensitivity <span id="sensVal">1.00</span></label>
         <input type="range" id="sens" min="0.1" max="5" step="0.05" value="1">
@@ -152,15 +166,16 @@
         <div><kbd>Right-click</kbd> zoom (Lily)</div>
         <div><kbd>Space</kbd> jump</div>
         <div><kbd>Shift</kbd> walk quietly</div>
-        <div><kbd>C</kbd> crouch</div>
+        <div><kbd>Ctrl</kbd> crouch</div>
         <div><kbd>R</kbd> refill bubbles</div>
         <div><kbd>B</kbd> shop</div>
         <div><kbd>1</kbd> main blaster · <kbd>2</kbd> sidearm</div>
         <div><kbd>3</kbd> knife · <kbd>4</kbd> the seed (hold to plant / uproot)</div>
         <div><kbd>5</kbd> grenades (press again to switch)</div>
-        <div><kbd>Q</kbd> swap main / sidearm</div>
+        <div><kbd>Q</kbd> sparkle pop · <kbd>E</kbd> cloud puff · <kbd>C</kbd> bubble bomb</div>
         <div><kbd>F</kbd> pick up / swap a blaster on the ground</div>
         <div><kbd>Y</kbd> inspect your blaster</div>
+        <div><kbd>T</kbd> practice range: pick the next refill show</div>
         <div><kbd>M</kbd> music on / off</div>
         <div><kbd>Tab</kbd> scoreboard</div>
         <div><kbd>Esc</kbd> pause</div>
@@ -184,7 +199,6 @@
   <script src="js/nav.js"></script>
   <script src="js/bot.js"></script>
   <script src="js/booboo.js"></script>
-  <script src="js/projectiles.js"></script>
   <script src="js/drops.js"></script>
   <script src="js/grenades.js"></script>
   <script src="js/sassy.js"></script>

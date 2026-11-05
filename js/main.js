@@ -79,9 +79,20 @@
   let MAP_ID = choose('map', Object.keys(MAPS), 'barcelona');
   let MODE = choose('mode', ['standard', 'swiftplay', 'skirmish'], 'standard');
   let BOTS = choose('bots', Object.keys(BOT_LEVELS), 'easy');
+  const NET = Net.detect();
+
+  // --- first screen: practice range or the real game (until you've picked, nothing loads) ---
+  if (!NET && !params.has('map')) {
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('launcher').classList.remove('hidden');
+    document.getElementById('goRange').addEventListener('click', () => { location.search = 'map=garden'; });
+    document.getElementById('goGame').addEventListener('click', () => {
+      location.search = new URLSearchParams({ map: 'barcelona', mode: 'standard', bots: 'easy' }).toString();
+    });
+    return;
+  }
 
   // --- menu: picking map / mode / bots restarts with the new settings ---
-  const NET = Net.detect();
   const current = { map: MAP_ID, mode: MODE, bots: BOTS, look: Look.name };
   document.querySelectorAll('.pick').forEach(row => {
     const param = row.dataset.param;
@@ -244,6 +255,25 @@
     Sound.swap();
   }
 
+  // practice range: T steps through the refill shows (the next refill plays the one picked), then back to random
+  const SHOWS = [null, 'pour', ...SASSY_STYLES];
+  let showIdx = 0;
+  function pickShow() {
+    showIdx = (showIdx + 1) % SHOWS.length;
+    const st = viewmodel.forcedStyle = SHOWS[showIdx];
+    HUD.flashHint(st ? `Next refill: ${st}${REFILL_WEIGHTS[st] ? '' : ' (not in matches)'}  ·  ${showIdx}/${SHOWS.length - 1}` : 'Next refill: random, like in matches');
+    Sound.click();
+  }
+
+  // Q sparkle pop · E cloud puff · C bubble bomb: hold that one straight away
+  function takeNade(kind) {
+    if (!me.nades[kind]) { HUD.flashHint(`No ${GRENADES[kind].name}. Buy one in the shop [B]`); return; }
+    if (me.slot === 'nade' && me.nadeKind === kind) return;
+    me.nadeKind = kind;
+    me.slot = 'nade';
+    Sound.swap();
+  }
+
   function throwVelocity(far) {
     const m = me.mover;
     const dir = new THREE.Vector3(-Math.sin(m.yaw) * Math.cos(m.pitch), Math.sin(m.pitch), -Math.cos(m.yaw) * Math.cos(m.pitch));
@@ -278,7 +308,6 @@
     if (slot === 'seed') {
       if (!me.carrying) { HUD.flashHint("You don't have the seed"); return; }
     } else if (!me.guns[slot]) return;
-    me.gun.drawTime = 0;
     me.slot = slot;
     if (me.guns[slot]) me.gun.cooldown = Math.max(me.gun.cooldown, 0.35);   // takes a moment to bring it up
     Sound.swap();
@@ -307,8 +336,11 @@
       flatDist(me.pos, mode.boo.pos) <= BOOBOO.uprootReach + 0.5;
     if (Input.justPressed('Digit4') && !nearTree) switchTo('seed');
     if (Input.justPressed('Digit5')) pickNade();
-    if (Input.justPressed('KeyQ')) switchTo(me.slot === 'main' ? 'side' : 'main');
+    if (Input.justPressed('KeyQ')) takeNade('flash');
+    if (Input.justPressed('KeyE')) takeNade('smoke');
+    if (Input.justPressed('KeyC')) takeNade('frag');
     if (Input.justPressed('KeyB')) shop.open();
+    if (mode.cheats && Input.justPressed('KeyT')) pickShow();
     if (Input.justPressed('KeyF') && !stuck) game.drops.trySwap(me);
     if (me.slot === 'seed' && !me.carrying) me.slot = me.guns.main ? 'main' : 'side';
     const gun = me.gun;
@@ -348,7 +380,7 @@
       fwd: (Input.held('KeyW') ? 1 : 0) - (Input.held('KeyS') ? 1 : 0),
       right: (Input.held('KeyD') ? 1 : 0) - (Input.held('KeyA') ? 1 : 0),
       jump: Input.justPressed('Space'),
-      crouch: Input.held('KeyC') || Input.held('ControlLeft') || Input.held('ControlRight'),
+      crouch: Input.held('ControlLeft') || Input.held('ControlRight'),
       walk: Input.held('ShiftLeft') || Input.held('ShiftRight'),
     });
     // before GO an invisible fence keeps everyone inside their spawn area
@@ -382,21 +414,6 @@
         const dir = new THREE.Vector3(-Math.sin(m.yaw) * Math.cos(m.pitch), Math.sin(m.pitch), -Math.cos(m.yaw) * Math.cos(m.pitch));
         game.melee(me, camera.position.clone(), dir, gun.def);
       }
-    } else if (gun.def.bow) {
-      // hold to pull the string, let go to shoot
-      if (down && gun.ready && gun.ammo > 0 && !locked) {
-        if (gun.drawTime === 0) Sound.bowDraw();
-        gun.drawTime += dt;
-      } else if (!down && gun.drawTime > 0) {
-        const charge = gun.charge;
-        if (charge >= 0.15 && !locked) {
-          const [dir] = gun.fire(m.yaw, m.pitch, m);
-          game.arrows.fire(me, muzzle(0.1, -0.08, -0.4), dir, gun.def, charge);
-          viewmodel.onFire();
-        }
-        gun.drawTime = 0;
-      }
-      if (gun.ammo === 0 && !gun.busy && gun.reserve > 0) gun.startReload();   // nock the next arrow
     } else {
       const trigger = gun.def.auto ? down : pressed;
       if (trigger && gun.ready && !locked) {
@@ -481,7 +498,10 @@
   Input.init(canvas);
   const playBtn = document.getElementById('playBtn');
   const menuSub = document.getElementById('menuSub');
-  const modeName = game.mode.kind === 'practice' ? mapDef.name
+  const homeBtn = document.getElementById('homeBtn');
+  if (NET) homeBtn.style.display = 'none';           // a friend game keeps its own link
+  homeBtn.addEventListener('click', () => { location.search = ''; });   // back to the first screen
+  const modeName = game.mode.kind === 'practice' ? 'Practice Range · cheats on'
     : `${mapDef.name} · ${MODE === 'skirmish' ? 'Skirmish' : game.mode.rules.name} · ${!netCfg ? BOTS + ' bots' : netCfg.noBots ? lanSize(netCfg.players) + ', no bots' : `with friends · ${BOTS} bots`}`;
   menuSub.textContent = modeName;
   playBtn.addEventListener('click', () => {

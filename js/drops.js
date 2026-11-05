@@ -22,16 +22,13 @@ class Drops {
   _model(gun) {
     const def = gun.def;
     const ctx = { _box: Viewmodel.prototype._box, _buildHand() {} };
-    const vm = def.bow ? Viewmodel.prototype._buildBow.call(ctx) : Viewmodel.prototype._buildFlower.call(ctx, def.look);
-    if (def.bow) Viewmodel.prototype._updateBow.call(ctx, vm, { charge: 0, reloading: 0, ammo: 1 }, 0, 0);
-    else {
-      setJarLevel(vm, gun.ammo / def.magSize);
-      vm.flash.visible = false;
-    }
+    const vm = Viewmodel.prototype._buildFlower.call(ctx, def.look, def.key);
+    setJarLevel(vm, gun.ammo / def.magSize);
+    vm.flash.visible = false;
     const g = vm.group;
     g.visible = true;
     g.position.set(0, 0, 0);
-    g.rotation.set(0, 0, def.bow ? Math.PI / 2 : 0);   // bows lie flat
+    g.rotation.set(0, 0, 0);
     g.scale.setScalar(1.5);
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
     const holder = new THREE.Group();
@@ -51,7 +48,6 @@ class Drops {
 
   _spawn(gun, at, yaw, owner) {
     gun.reloading = 0;
-    gun.drawTime = 0;
     gun.recoilPitch = gun.recoilYaw = 0;
     gun.sprayIndex = 0;
     const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));

@@ -71,6 +71,8 @@ function anglesTo(from, to) {
   return [Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz))];
 }
 
+const BOT_DRAW_TIME = 0.35;   // putting the knife away and the blaster up (the same as yours)
+
 class Bot {
   constructor(game, name, team, shirt, levelName = 'easy', seed = 1) {
     this.game = game;
@@ -173,7 +175,6 @@ class Bot {
     if (frozen) { this._prepWander(dt); return; }       // round hasn't started: stroll around spawn
     if (this.prepPath) { this.prepPath = null; this.path = null; }   // GO! drop the stroll
     const mode = this.game.mode;
-    this.slot = this.guns.main ? 'main' : 'side';           // bots always use their best blaster
     for (const g of Object.values(this.guns)) if (g) g.tick(dt);
     this.pauseTimer -= dt;
 
@@ -189,6 +190,7 @@ class Bot {
       this.seenTime += dt;
       if (this.actionHeld) { this.actionHeld = false; this.path = null; }   // stop planting to fight
     }
+    this._pickSlot(engaged);
 
     this._siteUtility();
     if (!engaged) { this._considerPeek(); this._lure(); }
@@ -201,7 +203,7 @@ class Bot {
     this._checkStuck(dt, move);
     const hiding = this.tactic && this.tactic.type === 'hide';
     const close = engaged && this.target.pos.distanceTo(this.pos) < 6;
-    if (engaged && (!hiding || close)) this._tryFire(dt); else this._idleReload();
+    if (engaged && (!hiding || close)) this._tryFire(dt); else if (this.slot !== 'knife') this._idleReload();
 
     this.model.setPose(this.mover.pos, this.mover.yaw, this.mover.pitch + this.gun.recoilPitch,
       this.mover.horizontalSpeed, dt);
@@ -323,6 +325,56 @@ class Bot {
       }
     }
     return false;
+  }
+
+  // Their best blaster, or the knife to run 1.5x faster. The knife has a price: no blaster in their
+  // paws, and drawing it again takes a moment (the same as yours), so they only run with it when
+  // they have far to go or are in a hurry, nobody's around, and they put it away before arriving.
+  _pickSlot(engaged) {
+    const best = this.guns.main ? 'main' : 'side', t = this.game.time;
+    const knife = this._wantKnife(engaged);
+    const slot = knife ? 'knife' : best;
+    if (slot === this.slot) return;
+    if (knife && t - (this.slotAt ?? -99) < 1) return;             // don't flick back and forth
+    this.slot = slot;
+    this.slotAt = t;
+    if (!knife) this.gun.cooldown = Math.max(this.gun.cooldown, BOT_DRAW_TIME);
+  }
+
+  _wantKnife(engaged) {
+    const t = this.game.time;
+    if (engaged || this.actionHeld || this.tactic || this.chasing) return false;
+    if (this.target && this.target.alive) return false;            // still looking for someone
+    if (!this.path || this.waitTimer > 0) return false;            // only while running somewhere
+    if (t - this.heardAt < 5 || t - this.lastSeenAt < 5 || this._spotted()) return false;   // trouble close by
+    const d = this._danger();
+    if (d && Math.hypot(d.x - this.pos.x, d.z - this.pos.z) < 22) return false;           // a teammate called someone near here
+    const left = this._pathLeft();
+    if (left < (this.slot === 'knife' ? 8 : 14)) return false;    // nearly there: blaster out before arriving
+    const hurry = this._mustRush() || this._hurry();
+    if (!hurry && (left < 30 || this._shouldSneak())) return false;   // far trips always; shorter ones only in a hurry
+    return true;
+  }
+
+  // the clock says run: retaking a planted site, or attacking late in the round
+  _hurry() {
+    const mode = this.game.mode;
+    if (mode.kind !== 'standard') return false;
+    const side = mode.sideOf(this.team);
+    if (mode.phase === 'planted') return side === 'defend';
+    return mode.phase === 'live' && side === 'attack' && mode.timeLeft < 45;
+  }
+
+  // how far is left to run along the path
+  _pathLeft() {
+    if (!this.path) return 0;
+    let d = 0, x = this.pos.x, z = this.pos.z;
+    for (let i = this.pathIdx; i < this.path.length; i++) {
+      const p = this.path[i];
+      d += Math.hypot(p.x - x, p.z - z);
+      x = p.x; z = p.z;
+    }
+    return d;
   }
 
   // the objective says: go now (e.g. the tree has to be cut down)
@@ -580,7 +632,7 @@ class Bot {
     if (this.targetVisible || this.tactic || this.path || this.waitTimer <= 0 || this.carrying) return;
     if (t - (this.lastLure || -99) < 30 || Math.random() > 0.01) return;
     const gun = this.gun;
-    if (gun.def.bow || gun.ammo < 3 || !gun.ready) return;
+    if (gun.ammo < 3 || !gun.ready) return;
     this.lastLure = t;
     const eye = this.mover.eyePosition(new THREE.Vector3());
     for (let i = 0; i < 2; i++) for (const dir of gun.fire(this.mover.yaw, this.mover.pitch, this.mover, true)) g.fireShot(this, eye.clone(), dir, gun);
@@ -636,7 +688,12 @@ class Bot {
       case 'sunflower': return d < 8 ? 1.2 : d < 14 ? 0 : -1.2;
       case 'tulip': return d < 15 ? 0.4 : -0.4;
       case 'lily': return d > 15 ? 0.8 : -0.3;
-      case 'rosebow': return d > 10 ? 0.4 : -0.3;
+      case 'pansy': return d < 6 ? 0.9 : d < 10 ? -0.3 : -1.5;
+      case 'bluebell': return d > 15 ? 0.6 : -0.4;
+      case 'hushbloom': return 0.3;
+      case 'buzzy': return d < 10 ? 0.4 : -0.6;
+      case 'hushdaisy': return -0.1;
+      case 'cactus': return d > 6 ? 0.1 : -0.1;
       case 'bloom': return 0.3;
       default: return -0.3;                                  // Dandelion
     }
@@ -664,8 +721,10 @@ class Bot {
       else if (e.team !== this.team && e.team !== 'buddy' && d < 20) foes++;
     }
     s += 0.5 * (friends - (foes - 1));
+    if (this.slot === 'knife') s -= 1;                              // caught with the knife out: blaster not ready
+    if (enemy.slot === 'knife') s += 1;                             // ...and theirs is: easy pop
     if (this.gun.busy) s -= 1.5;
-    else if (!this.gun.def.bow && this.gun.ammo < this.gun.def.magSize * 0.25) s -= 1.2;
+    else if (this.gun.ammo < this.gun.def.magSize * 0.25) s -= 1.2;
     if (this.tactic && this.tactic.type === 'hold') s += 0.8;     // we're already pre-aimed here
     if (dist < 5) s += 1.5;                                        // too close to run away
     if (dist >= 5 && this._sandwiched()) s -= 1.2;                 // enemies on two sides: don't stand between them
@@ -733,7 +792,7 @@ class Bot {
     this.heardAt = g.time;
     if (this.tactic && this.tactic.type !== 'hold') return;
     const strong = this.health + this.shield >= 60;
-    const closeGun = this.gun.def.key === 'sunflower' || this.gun.def.key === 'tulip';
+    const closeGun = CLOSE_RANGE_GUNS.includes(this.gun.def.key);
     // they're refilling right next to us: they can't shoot back right now. Go!
     if (kind === 'reload' && d < 12 && strong && this._peek(pos, 3)) return;
     // close footsteps + a close-range blaster + they don't know we're here: pounce
@@ -814,27 +873,14 @@ class Bot {
     if (Math.random() < 0.7) this._throw('flash', new THREE.Vector3(c.x, y + 1, c.z));
   }
 
-  // Where to look to hit `pt`. For the bow, aim above the target so the arrow's drop lands on it.
-  _aimAngles(eye, pt) {
-    const def = this.gun.def;
-    if (!def.bow) return anglesTo(eye, pt);
-    const dx = pt.x - eye.x, dz = pt.z - eye.z, d = Math.hypot(dx, dz), h = pt.y - eye.y;
-    const v = def.draw.maxSpeed, g = def.draw.gravity, v2 = v * v;
-    const disc = v2 * v2 - g * (g * d * d + 2 * h * v2);
-    const pitch = disc < 0 ? Math.atan2(h, d) + 0.3 : Math.atan((v2 - Math.sqrt(disc)) / (g * d));
-    return [Math.atan2(-dx, -dz), pitch];
-  }
+  // Where to look to hit `pt`.
+  _aimAngles(eye, pt) { return anglesTo(eye, pt); }
 
   _tryFire(dt) {
     const L = this.level, gun = this.gun, me = this.mover;
     if (this.seenTime < L.reaction) return;
     if (gun.ammo === 0) { this._reload(); return; }
     if (!gun.ready || this.pauseTimer > 0) return;
-
-    if (gun.def.bow) {                       // pull the string all the way first
-      gun.drawTime += dt;
-      if (gun.charge < 1) return;
-    }
 
     // only shoot when the aim is close enough to the real target point
     const eye = me.eyePosition(this._eye);
@@ -847,12 +893,8 @@ class Bot {
 
     const scoped = me.horizontalSpeed < 0.5;   // standing still counts as zoomed in for bots
     const dirs = gun.fire(me.yaw, me.pitch, me, scoped);
-    if (gun.def.bow) {
-      this.game.arrows.fire(this, this.model.muzzlePosition(new THREE.Vector3()), dirs[0], gun.def, 1);
-    } else {
-      for (const dir of dirs) this.game.fireShot(this, eye.clone(), dir, gun);
-      this.game.shotHeard(this, eye.clone(), gun.def.key);
-    }
+    for (const dir of dirs) this.game.fireShot(this, eye.clone(), dir, gun);
+    this.game.shotHeard(this, eye.clone(), gun.def.key);
     this.firedAt = this.game.time;
     this.burstLeft--;
     if (this.burstLeft <= 0) {

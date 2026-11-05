@@ -258,12 +258,26 @@ const Sound = (() => {
         return;
       }
       if (kind === 'lily') { tone(180, 0.3, 0.45 * vol, 'triangle', 60); noise(0.2, 2500, 0.15 * vol); return; }
+      if (kind === 'hushdaisy' || kind === 'hushbloom') {           // silenced: just a soft "pff"
+        noise(0.05, 1100, (kind === 'hushbloom' ? 0.14 : 0.11) * vol, 'lowpass'); tone(320 + r * 40, 0.04, 0.07 * vol, 'sine', 200);
+        return;
+      }
+      if (kind === 'buzzy') { tone(760 + r * 120, 0.04, 0.16 * vol, 'square', 900); noise(0.02, 4000, 0.03 * vol); return; }
+      if (kind === 'cactus') {                                       // a big pop with a little twang
+        tone(150, 0.25, 0.5 * vol, 'triangle', 60); noise(0.18, 1500, 0.3 * vol, 'lowpass'); tone(1200, 0.15, 0.06 * vol, 'sine', 800);
+        return;
+      }
+      if (kind === 'pansy') {
+        noise(0.15, 2000, 0.25 * vol, 'lowpass');
+        for (let i = 0; i < 3; i++) tone(350 + Math.random() * 300, 0.1, 0.1 * vol, 'sine', 1100, i * 0.02);
+        return;
+      }
+      if (kind === 'bluebell') { tone(260, 0.22, 0.35 * vol, 'triangle', 90); tone(1600, 0.25, 0.08 * vol, 'sine', 1500); return; }
       const f = 380 + r * 80;
       tone(f, 0.09, 0.35 * vol, 'sine', f * 2.4);
       noise(0.05, 3000, 0.06 * vol);
     },
     bowDraw() { if (!on()) return; tone(140, 0.5, 0.06, 'sawtooth', 220); },
-    bowRelease(vol = 1) { if (!on() || vol < 0.04) return; tone(900, 0.12, 0.25 * vol, 'triangle', 200); noise(0.08, 4000, 0.1 * vol); },
     thunk(vol = 1) { if (!on() || vol < 0.04) return; tone(220, 0.08, 0.3 * vol, 'square', 90); },
     buy() { if (!on()) return; tone(988, 0.08, 0.15, 'square'); tone(1319, 0.14, 0.15, 'square', 1319, 0.07); },
     swap() { if (!on()) return; tone(500, 0.04, 0.08, 'square', 700); },

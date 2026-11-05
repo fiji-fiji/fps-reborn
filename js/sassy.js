@@ -10,7 +10,8 @@
 //   orbit   — three droplets circle over her palm like little planets, flicked in one by one
 //   rain    — a tiny cloud puffs up over her palm, she wafts it over the glass, and it rains in
 //   yoyo    — a ball of water on a thread of water, yo-yo'd from her claws, then dropped in
-//   whirl   — the hypnotist: claws rippling, wrist circling, a waterspout spins down into the glass
+//   whirl   — the ninja: on the left, lightning-fast hand signs, a waterspout spins down into
+//             the glass, and a knife-hand CHOP to finish
 //   wand    — pinches a ring of water with a soap film, a big bubble swells out, floats over, pops in
 //   dribble — dribbles a ball of water like a basketball, then a bank shot off the lid
 //   lasso   — the cowboy: her fist swings a lasso of water, catches the runaway lid, it drains in
@@ -18,6 +19,8 @@
 //   snap    — (from the reference video) snap ready… up close… the tension builds… SNAP: sparkles, full
 // …and every one has its own lid trick:
 //   fumble: pops off, crumbles to dust, comes slowly back out of a tiny tiny black hole, SNAP
+//   the four other fumbles: a gust blows it away, and it drifts back like a falling leaf,
+//   landing on the glass just as the blaster is ready again
 //   ribbon, orbit, rain: floats off by telekinesis, hovers aside, settles back
 //   yoyo: flipped like a coin · whirl: caught in the whirl like a frisbee · wand: floats off in a
 //   bubble of its own · dribble: a backboard · lasso: runs away and gets lassoed · pearls: hinges
@@ -37,17 +40,17 @@
 const PRIMARY_REFILLS = ['fumble', 'ribbon', 'orbit', 'rain', 'yoyo', 'whirl', 'wand', 'dribble', 'lasso', 'pearls', 'snap'];
 const SECONDARY_REFILLS = ['pour', 'file', 'polish', 'drum', 'peace', 'shades', 'knock', 'poke', 'cork'];
 const SASSY_STYLES = [...PRIMARY_REFILLS, ...SECONDARY_REFILLS].filter(st => st !== 'pour');   // every show the paw does
-const REFILL_WEIGHTS = { polish: 1.6 };          // everything else is 1
+// How often each show comes up in matches, from the ranking (0 = doesn't play, but kept).
+// Picked: fumble, ribbon, orbit, whirl, snap, pour, all equally often. Tossed: file, polish.
+const REFILL_WEIGHTS = {
+  fumble: 1, ribbon: 1, orbit: 1, rain: 0, yoyo: 0, whirl: 1, wand: 0, dribble: 0, lasso: 0, pearls: 0, snap: 1,
+  pour: 1, file: 0, polish: 0, drum: 0, peace: 0, shades: 0, knock: 0, poke: 0, cork: 0,
+};
 
-// SURVEY MODE: every show (primary and secondary) plays in matches, so they can all be seen
-// and ranked. Set it back to false to play only the primaries.
-const SURVEY_ALL_REFILLS = true;
-
-// A random refill show, never the same one twice in a row.
+// A random refill show (by weight), never the same one twice in a row.
 function pickRefillStyle(prev) {
-  const pool = SURVEY_ALL_REFILLS ? [...PRIMARY_REFILLS, ...SECONDARY_REFILLS] : PRIMARY_REFILLS;
-  const styles = pool.filter(st => st !== prev);
-  const w = st => REFILL_WEIGHTS[st] || 1;
+  const w = st => REFILL_WEIGHTS[st] || 0;
+  const styles = [...PRIMARY_REFILLS, ...SECONDARY_REFILLS].filter(st => st !== prev && w(st) > 0);
   let r = Math.random() * styles.reduce((a, st) => a + w(st), 0);
   for (const st of styles) { r -= w(st); if (r < 0) return st; }
   return styles[styles.length - 1];
@@ -66,6 +69,8 @@ const HAND_POSES = {
   snapPress: { c: [0.62, 0.72, 1.42, 1.52], th: 1.08 },   // pressing hard, about to go
   snapGun:   { c: [0.05, 1.6, 1.45, 1.5], th: -0.25 },    // snapped: claw out like a finger gun, thumb up
   pinky:     { c: [1.45, 1.45, 1.4, 0.1], th: 0.9 },     // pinky up, like holding a teacup
+  seal:      { c: [0, 0, 1.5, 1.5], th: 1.05 },          // ninja hand sign: two claws up together
+  knife:     { c: [0, 0, 0, 0], th: 0.95 },              // ninja knife-hand: straight, thumb tucked
   thumbsUp:  { c: [1.5, 1.5, 1.5, 1.5], th: -0.4 },
   peace:     { c: [0, 0, 1.5, 1.5], th: 0.95 },
   pinch:     { c: [0.7, 0.9, 1.25, 1.4], th: 0.55 },
@@ -927,12 +932,10 @@ class SassyHand {
         break;
       }
       case 'whirl': {
-        // she twirls a claw and a little waterspout spins down out of it into the glass. The lid
+        // a little waterspout spins down out of thin air into the glass (the ninja's doing it). The lid
         // gets caught in the whirl and goes round and round it like a frisbee.
         const top = mouth.clone().add(V(-0.045, 0.085, 0.012));
         const tw = ease01(span(t, 0.16, 0.24)) * (1 - ease01(span(t, 0.76, 0.84)));
-        const ang = t * 38;
-        const claw = top.clone().add(V(0.006 * Math.cos(ang) * tw, 0.003 * Math.sin(ang) * tw, 0.006 * Math.sin(ang) * tw));
         const axis = v => top.clone().lerp(mouth, v);
         const reach = span(t, WHIRL.from - 0.06, WHIRL.from + 0.04), drain = span(t, WHIRL.to - 0.04, WHIRL.to + 0.04);
         for (let i = 0; i < 20; i++) {
@@ -942,11 +945,38 @@ class SassyHand {
           const a = v * Math.PI * 5 + t * 45;
           drop(axis(v).add(V(r * Math.cos(a), 0, r * Math.sin(a))), 0.38 + 0.14 * Math.sin(v * Math.PI));
         }
-        // the hypnotist: palm to you, claws rippling in a wave, her wrist circling over the spout
-        this._pose('claw', 'relaxed', ease01(span(t, 0.8, 0.86)));
-        this.fingers.forEach((f, i) => { const w = 0.4 * tw * Math.sin(t * 22 - i * 1.1); f.k.rotation.x -= w; f.m.rotation.x -= w; });
-        R.rotation.set(-0.15, Math.PI, 0.55 + 0.12 * Math.sin(ang) * tw);
-        reachTo(claw, V(0, 0.07, -0.02));
+        // the ninja: over on the left of the screen, side on (fingers up, palm to the glass), she
+        // flashes hand signs, snap snap snap, faster than you can follow, while the spout spins…
+        // then a big knife-hand CHOP towards the glass, and holds it there. Hi-yah.
+        const NIN = jar.clone().add(V(-0.29, 0.045, 0.04));
+        const SIGNS = ['seal', 'fist', 'knife', 'seal', 'claw', 'fist', 'seal', 'knife'], S0 = 0.27, SD = 0.055;
+        const CHOP = S0 + SIGNS.length * SD;               // 0.71: the chop
+        const n = Math.floor((t - S0) / SD), inSigns = t >= S0 && n < SIGNS.length;
+        const jumps = [[0, 0.01], [0.012, -0.004], [-0.008, 0.006], [0.006, 0.014], [-0.01, -0.002], [0.01, 0.008], [-0.004, 0.016], [0.008, 0]];
+        let at = NIN.clone(), tilt = 0;
+        if (t < S0) {                                     // up into the first sign, slow and steady
+          this._pose('relaxed', 'seal', ease01(span(t, 0.12, 0.24)));
+          at.y += 0.01 * ease01(span(t, 0.12, 0.24));
+        } else if (inSigns) {                             // snap from sign to sign, a little jump each time
+          const u = span(t - S0 - n * SD, 0, 0.014);
+          this._pose(SIGNS[Math.max(0, n - 1)], SIGNS[n], n === 0 ? 1 : ease01(u));
+          const [jx, jy] = jumps[n], [px, py] = jumps[Math.max(0, n - 1)];
+          at.add(V(px + (jx - px) * ease01(u), py + (jy - py) * ease01(u), 0));
+          tilt = (n % 2 ? 0.18 : -0.12) * ease01(u);
+        } else {                                          // CHOP! …and hold it
+          const c = ease01(span(t, CHOP, CHOP + 0.035));
+          this._pose('knife', 'relaxed', ease01(span(t, 0.84, 0.9)));
+          at.add(V(0.008 + 0.06 * c, 0.03 * (1 - c) - 0.02 * c, -0.01 * c));
+          tilt = -0.3 + 1.25 * c;
+        }
+        R.quaternion.setFromAxisAngle(V(0, 0, 1), -tilt).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), -Math.PI / 2));
+        reachTo(at, V(0, 0.03, 0));
+        if (inSigns && crossed(S0 + n * SD)) {
+          if (n % 2 === 0) Sound.swish(); else Sound.tap();
+          R.updateMatrixWorld(true);
+          this._spark(R.localToWorld(this._nailPos(0)), 2);
+        }
+        if (crossed(CHOP)) { Sound.swish(); Sound.chop(); this._bump(1.6); this._spark(mouth.clone(), 8, 'water'); }
         // the frisbee lid, round and round the waterspout
         const k = ease01(span(t, 0.14, 0.26)) * (1 - ease01(span(t, 0.78, 0.86)));
         if (k > 0) {

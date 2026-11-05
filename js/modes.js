@@ -2,7 +2,8 @@
 //   StandardMode  — rounds with the Boo-Boo, money + shop, first to 13 (win by two)
 //                   (also Swiftplay: same rounds, first to 5, sides swap after 4)
 //   SkirmishMode  — team fight with respawns
-//   PracticeMode  — practice garden with buddies (free shop)
+//   PracticeMode  — the practice range: buddies to pop, cheats on (free shop, bottomless
+//                   reserves and grenades, nothing can pop you)
 // Every mode answers the same questions for the rest of the game:
 //   sideOf(team), botGoal(bot), onOut(victim, attacker, part), update(dt), frozen,
 //   isBusy(e), canBuy(e), freeShop, hintFor(me), actionFor(me), hud(), booMarker(team),
@@ -16,7 +17,8 @@ const ROUND = {
   half: 12,         // sides swap after 12 rounds (and every round in overtime)
 };
 // Swiftplay: a short match. First to 5, sides swap after round 4; at 4-4 round 9 decides it.
-const closeRangeGun = bot => !!(bot.gun && (bot.gun.def.key === 'sunflower' || bot.gun.def.key === 'tulip'));
+const CLOSE_RANGE_GUNS = ['sunflower', 'tulip', 'pansy', 'buzzy'];   // blasters that want to fight up close
+const closeRangeGun = bot => !!(bot.gun && CLOSE_RANGE_GUNS.includes(bot.gun.def.key));
 const SWIFTPLAY = { name: 'Swiftplay', toWin: 5, half: 4, winByTwo: false };
 const ECON = { start: 800, win: 3000, loss: [1900, 2400, 2900], pop: 200, plant: 300 };
 
@@ -103,7 +105,6 @@ class StandardMode {
       g.spawnAt(e);
     }
     if (halftime) this.lossStreak = { blue: 0, red: 0 };
-    g.arrows.clear();
     g.drops.clear();
     g.throwables.clear();
     this.plantAnim.cancel();
@@ -172,7 +173,8 @@ class StandardMode {
     if (halftime) HUD.openShopSoon();                          // fresh money after halftime: show the shop
   }
 
-  // Bots spend their money: save when poor, rifles + shields when rich, a few bows and lilies.
+  // Bots spend their money: save when poor, rifles + shields when rich, a few scouts and lilies,
+  // a better sidearm on pistol rounds (or when they're rolling in it).
   _botsBuy() {
     const g = this.game;
     const pistolRound = this.round === 1 || this.round === this.rules.half + 1;
@@ -180,12 +182,22 @@ class StandardMode {
       if (!b.guns.main && !pistolRound) {
         const m = b.money, opts = [];
         if (m >= 5500) opts.push(['lily', 1]);
-        if (m >= 3300) opts.push(['bloom', 5]);
-        if (m >= 2600) opts.push(['rosebow', 1.5]);
+        if (m >= 3300) opts.push(['bloom', 4], ['hushbloom', 2]);
         if (m >= 1800) opts.push(['sunflower', 1]);
+        if (m >= 1500) opts.push(['bluebell', m < 3300 ? 1 : 0.3]);
         if (m >= 900) opts.push(['tulip', m < 2900 ? 2 : 0.5]);
         const saving = m < 2000 && Math.random() < 0.5;
         if (opts.length && !saving) g.buy(b, weightedPick(opts));
+        else if (saving && m >= 650 && Math.random() < 0.3) g.buy(b, 'pansy');   // a cheap splasher sidearm while saving
+      }
+      if (b.guns.side && b.guns.side.def.key === 'dandelion') {
+        const m = b.money, opts = [];
+        if (pistolRound && Math.random() < 0.7) {
+          if (m >= 800) opts.push(['cactus', 1]);
+          if (m >= 500) opts.push(['hushdaisy', 2]);
+          if (m >= 400) opts.push(['buzzy', 1.5]);
+        } else if (!pistolRound && m >= 4500) opts.push(['cactus', 1], ['hushdaisy', 1]);
+        if (opts.length) g.buy(b, weightedPick(opts));
       }
       if (b.shield < 50 && b.money >= 1000 && !pistolRound) g.buy(b, 'heavy');
       else if (b.shield < 25 && b.money >= 400) g.buy(b, 'light');
@@ -721,6 +733,7 @@ class PracticeMode {
     game.mode = this;
     this.kind = 'practice';
     this.freeShop = true;          // try every blaster for free
+    this.cheats = true;            // unlimited everything, and you can't be popped
     this.version = 0;
     this.frozen = false;
     const p = game.player;
@@ -734,9 +747,16 @@ class PracticeMode {
   canBuy() { return true; }
   botGoal() { return null; }
   onOut() {}
-  update() {}
+  // cheats: the bubble supply never runs dry (the jar still empties, so refills still play),
+  // every grenade pouch stays full, and health stays topped up
+  update() {
+    const p = this.game.player;
+    for (const g of Object.values(p.guns)) if (g && !g.def.melee) g.reserve = g.def.reserve;
+    for (const k of NADE_ORDER) p.nades[k] = GRENADES[k].max;
+    p.health = 100;
+  }
   isBusy() { return false; }
-  hintFor() { return 'Press [B] to try any blaster for free'; }
+  hintFor() { return ''; }        // a clear screen: no standing message on the range
   actionFor() { return null; }
   booMarker() { return null; }
   markersFor() { return []; }

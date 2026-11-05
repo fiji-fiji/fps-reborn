@@ -3,6 +3,7 @@
 //
 // Each weapon: slot ('main' or 'side'), price, plain-words description, shop bars,
 // fire behaviour, damage per body part, spread (inaccuracy, radians), recoil, and looks.
+// silenced: only heard close by (and quietly), and it doesn't show you on the enemy's minimap.
 
 const WEAPONS = {
   dandelion: {
@@ -15,6 +16,53 @@ const WEAPONS = {
     spread: { base: 0.004, walk: 0.006, run: 0.025, air: 0.15, crouchMul: 0.85, perShot: 0.008, maxSpray: 0.04 },
     recoil: { kicks: [0, 0.012, 0.014], sustained: 0.014, side: 0.004, maxUp: 0.07, recover: 12 },
     look: { petal: 0xfff27a, petal2: 0xffffff, center: 0xffd36b, size: 0.7, jar: true, short: true },
+  },
+  // --- sidearms (slot 2): the free Dandelion, or buy a better one ---
+  buzzy: {
+    name: 'Buzzy-11', slot: 'side', price: 400,
+    desc: 'A buzzing little sprayer. Great up close, falls apart far away.',
+    bars: { power: 0.25, speed: 1, range: 0.15 },
+    auto: true, fireRate: 14, magSize: 20, reserve: 60, reloadTime: 1.9, range: 120,
+    damage: { head: 52, body: 18, legs: 15 },
+    falloff: { start: 10, end: 25, min: 0.6 },
+    spread: { base: 0.012, walk: 0.006, run: 0.02, air: 0.12, crouchMul: 0.9, perShot: 0.003, maxSpray: 0.045 },
+    recoil: { kicks: [0, 0.004, 0.005, 0.006], sustained: 0.005, side: 0.008, maxUp: 0.06, recover: 10 },
+    look: { petal: 0xffd23f, petal2: 0x3a3a4a, center: 0x3a3a4a, size: 0.7, jar: true, short: true, stripes: true },
+  },
+  hushdaisy: {
+    name: 'Hush Daisy', slot: 'side', price: 500,
+    desc: 'A quiet Dandelion upgrade: harder hits, steadier aim, and enemies barely hear it.',
+    bars: { power: 0.4, speed: 0.5, range: 0.55 },
+    silenced: true,
+    auto: false, fireRate: 6, magSize: 13, reserve: 52, reloadTime: 1.6, range: 150,
+    damage: { head: 104, body: 30, legs: 25 },
+    falloff: { start: 35, end: 60, min: 0.85 },
+    spread: { base: 0.003, walk: 0.005, run: 0.022, air: 0.15, crouchMul: 0.85, perShot: 0.006, maxSpray: 0.035 },
+    recoil: { kicks: [0, 0.01, 0.012], sustained: 0.012, side: 0.003, maxUp: 0.06, recover: 13 },
+    look: { petal: 0xffffff, petal2: 0xf4f4ff, center: 0xffd23f, size: 0.7, jar: true, short: true, hush: true },
+  },
+  cactus: {
+    name: 'Cactus Revolver', slot: 'side', price: 800,
+    desc: 'Six heavy shots. One head hit pops anyone. Stand still to aim it.',
+    bars: { power: 0.9, speed: 0.2, range: 0.6 },
+    auto: false, fireRate: 2.2, magSize: 6, reserve: 30, reloadTime: 2.3, range: 160,
+    damage: { head: 180, body: 55, legs: 45 },
+    falloff: { start: 30, end: 55, min: 0.8 },
+    spread: { base: 0.003, walk: 0.03, run: 0.07, air: 0.2, crouchMul: 0.8, perShot: 0.02, maxSpray: 0.05 },
+    recoil: { kicks: [0.05], sustained: 0.05, side: 0.01, maxUp: 0.08, recover: 7 },
+    look: { petal: 0xff5d8f, petal2: 0xff9ec0, center: 0xffd36b, size: 0.6, jar: true, short: true, cactus: true },
+  },
+  pansy: {
+    name: 'Pansy Pump', slot: 'side', price: 250,
+    desc: 'A cheap little splasher. Fine right up close, useless any further.',
+    bars: { power: 0.6, speed: 0.3, range: 0.05 },
+    auto: false, fireRate: 1.4, magSize: 4, reserve: 20, reloadTime: 2, range: 40,
+    pellets: 7, pelletSpread: 0.09,
+    damage: { head: 18, body: 10, legs: 8 },
+    falloff: { start: 5, end: 12, min: 0.2 },
+    spread: { base: 0, walk: 0.005, run: 0.01, air: 0.05, crouchMul: 1, perShot: 0, maxSpray: 0 },
+    recoil: { kicks: [0.025], sustained: 0.025, side: 0, maxUp: 0.05, recover: 7 },
+    look: { petal: 0x8a4fd8, petal2: 0xffd23f, center: 0x3a2050, size: 0.9, jar: true, short: true, twin: true },
   },
   tulip: {
     name: 'Tulip Popper', slot: 'main', price: 900,
@@ -39,15 +87,16 @@ const WEAPONS = {
     recoil: { kicks: [0.03], sustained: 0.03, side: 0, maxUp: 0.06, recover: 6 },
     look: { petal: 0xffd23f, petal2: 0xffc107, center: 0x6b4a2b, size: 1.2, jar: true },
   },
-  rosebow: {
-    name: 'Rose Bow', slot: 'main', price: 2200,
-    desc: 'Hold click to pull, let go to shoot. Arrows fly in an arc!',
-    bars: { power: 0.9, speed: 0.25, range: 0.9 },
-    bow: true, auto: false, fireRate: 1.6, magSize: 1, reserve: 14, reloadTime: 0.5, range: 200,
-    draw: { time: 0.85, minSpeed: 20, maxSpeed: 70, gravity: 14 },
-    damage: { head: 200, body: 90, legs: 70 },          // at full pull; weaker when not fully pulled
-    spread: { base: 0.001, walk: 0.01, run: 0.03, air: 0.08, crouchMul: 0.8, perShot: 0, maxSpray: 0 },
-    recoil: { kicks: [0], sustained: 0, side: 0, maxUp: 0, recover: 10 },
+  bluebell: {
+    name: 'Bluebell Scout', slot: 'main', price: 950,
+    desc: 'A light sniper. One head hit pops, a body hit doesn\'t. Right-click to zoom.',
+    bars: { power: 0.7, speed: 0.3, range: 1 },
+    auto: false, fireRate: 1.1, magSize: 8, reserve: 24, reloadTime: 2.2, range: 250,
+    scope: { fov: 32, unscoped: 0.04 },
+    damage: { head: 220, body: 80, legs: 65 },
+    spread: { base: 0.0008, walk: 0.02, run: 0.05, air: 0.15, crouchMul: 0.8, perShot: 0, maxSpray: 0 },
+    recoil: { kicks: [0.035], sustained: 0.035, side: 0, maxUp: 0.05, recover: 7 },
+    look: { petal: 0x5b8cff, petal2: 0x8fb0ff, center: 0xeef0ff, size: 0.8, jar: true, long: true, bell: true },
   },
   bloom: {
     name: 'Bloom Blaster', slot: 'main', price: 2900,
@@ -58,6 +107,17 @@ const WEAPONS = {
     spread: { base: 0.002, walk: 0.012, run: 0.06, air: 0.22, crouchMul: 0.8, perShot: 0.004, maxSpray: 0.035 },
     recoil: { kicks: [0, 0.006, 0.010, 0.013, 0.015, 0.016, 0.016, 0.014], sustained: 0.008, side: 0.006, maxUp: 0.13, recover: 9 },
     look: { petal: 0xff8fb1, petal2: 0xffb3cc, center: 0xffd36b, size: 1, jar: true },
+  },
+  hushbloom: {
+    name: 'Hush Bloom', slot: 'main', price: 2900,
+    desc: 'Quieter and faster than the Bloom, less kick. But one head hit doesn\'t pop.',
+    bars: { power: 0.55, speed: 0.8, range: 0.8 },
+    silenced: true,
+    auto: true, fireRate: 11.5, magSize: 20, reserve: 60, reloadTime: 1.7, range: 200,
+    damage: { head: 92, body: 33, legs: 28 },            // two head hits (or one + a body hit) to pop
+    spread: { base: 0.002, walk: 0.011, run: 0.055, air: 0.22, crouchMul: 0.8, perShot: 0.003, maxSpray: 0.028 },
+    recoil: { kicks: [0, 0.005, 0.008, 0.01, 0.011, 0.012, 0.012, 0.011], sustained: 0.006, side: 0.005, maxUp: 0.1, recover: 10 },
+    look: { petal: 0xc9a7ff, petal2: 0xe2d1ff, center: 0xffd36b, size: 0.9, jar: true, hush: true },
   },
   lily: {
     name: 'Lily Longshot', slot: 'main', price: 4500,
@@ -91,10 +151,12 @@ const SHIELDS = {
   light: { key: 'light', name: 'Bubble Wrap', price: 400, amount: 25, desc: '+25 shield on top of your health.' },
   heavy: { key: 'heavy', name: 'Big Bubble', price: 1000, amount: 50, desc: '+50 shield on top of your health.' },
 };
-const SHOP_ORDER = ['tulip', 'sunflower', 'rosebow', 'bloom', 'lily'];
+const SIDE_ORDER = ['dandelion', 'pansy', 'buzzy', 'hushdaisy', 'cactus'];   // sidearms (shop: left column)
+const SHOP_ORDER = ['tulip', 'sunflower', 'bloom', 'hushbloom'];             // main blasters (middle column)
+const SNIPER_ORDER = ['bluebell', 'lily'];                                    // snipers, also slot 1 (right column)
 
 // ---------------------------------------------------------------------------
-// Gun: ammo, fire rate, spread, recoil, refilling (and bow drawing). No visuals, no input.
+// Gun: ammo, fire rate, spread, recoil, refilling. No visuals, no input.
 class Gun {
   constructor(def) {
     this.def = def;
@@ -110,19 +172,15 @@ class Gun {
     this.sinceShot = 10;
     this.recoilPitch = 0;
     this.recoilYaw = 0;
-    this.drawTime = 0;           // bow: how long the string has been pulled
   }
 
   get busy() { return this.reloading > 0; }
   get ready() { return this.cooldown <= 0 && !this.busy; }
-  // bow: 0..1 how far the string is pulled
-  get charge() { return this.def.bow ? Math.min(1, this.drawTime / this.def.draw.time) : 0; }
 
   // Returns true if a refill started.
   startReload() {
     if (this.reloading > 0 || this.ammo === this.def.magSize || this.reserve === 0) return false;
     this.reloading = this.def.reloadTime;
-    this.drawTime = 0;
     return true;
   }
 
@@ -182,7 +240,6 @@ class Gun {
     // keep leftover frame time while spraying so fire rate stays exact
     this.cooldown = Math.max(this.cooldown, -0.05) + 1 / d.fireRate;
     this.sinceShot = 0;
-    this.drawTime = 0;
 
     const p = pitch + this.recoilPitch;
     const y = yaw + this.recoilYaw;
@@ -243,6 +300,26 @@ const VESSELS = {
   // tall graduated cylinder on a wide foot, measuring lines
   lily: { pts: [[0, 0.012], [0.03, 0.012], [0.03, 0.2], [0.035, 0.205]], fill: 0.185, mid: 0.1, bodyR: 0.03,
     stopper: 'cork', neckR: 0.03, marks: [0.05, 0.08, 0.11, 0.14, 0.17], foot: true },
+  // volumetric flask: a flat round bulb and a long thin neck with one ring mark
+  buzzy: { pts: [[0, 0], [0.03, 0], [0.04, 0.012], [0.044, 0.03], [0.04, 0.048], [0.026, 0.062], [0.012, 0.07], [0.012, 0.15], [0.015, 0.153]],
+    fill: 0.065, mid: 0.032, bodyR: 0.044, stopper: 'cork', neckR: 0.012, marks: [0.11] },
+  // a little vial with a shoulder
+  hushdaisy: { pts: [[0, 0], [0.02, 0], [0.022, 0.004], [0.022, 0.075], [0.017, 0.083], [0.014, 0.086], [0.014, 0.095], [0.016, 0.097]],
+    fill: 0.07, mid: 0.04, bodyR: 0.022, stopper: 'cork', neckR: 0.014 },
+  // separatory funnel: a pear, pointed at the bottom, with a drip tube
+  cactus: { pts: [[0.003, 0], [0.004, 0.012], [0.02, 0.04], [0.034, 0.065], [0.04, 0.085], [0.036, 0.1], [0.016, 0.112], [0.013, 0.12], [0.013, 0.13], [0.016, 0.132]],
+    fill: 0.1, mid: 0.075, bodyR: 0.04, stopper: 'cork', neckR: 0.013 },
+  // petri dish: wide and flat, with a glass lid
+  pansy: { pts: [[0, 0], [0.055, 0], [0.056, 0.002], [0.056, 0.016], [0.058, 0.018]], fill: 0.013, mid: 0.008, bodyR: 0.056,
+    stopper: 'lid', neckR: 0.058 },
+  // burette: a tall thin tube with a little tap at the bottom, lots of measuring lines
+  bluebell: { pts: [[0.004, 0], [0.004, 0.012], [0.009, 0.02], [0.014, 0.03], [0.014, 0.2], [0.017, 0.204]], fill: 0.19, mid: 0.1, bodyR: 0.014,
+    stopper: 'cork', neckR: 0.014, marks: [0.06, 0.09, 0.12, 0.15, 0.18], tap: true },
+  // Florence flask: a glass ball on a flat bottom, a short neck
+  hushbloom: { pts: (() => { const r = 0.055, out = [[0, 0], [r * Math.cos(-Math.PI / 3), 0]];
+      for (let i = 1; i <= 10; i++) { const a = -Math.PI / 3 + (i / 10) * (Math.PI / 3 + 1.13); out.push([Math.cos(a) * r, r * (1 + Math.sin(a)) - 0.0074]); }
+      out.push([0.02, 0.1], [0.02, 0.13], [0.024, 0.133]); return out; })(),
+    fill: 0.08, mid: 0.05, bodyR: 0.055, stopper: 'cork', neckR: 0.02 },
 };
 VESSELS.default = VESSELS.sunflower;
 
@@ -304,7 +381,7 @@ class Viewmodel {
     const key = gun.def.key;
     if (!this.models[key]) {
       const d = gun.def;
-      this.models[key] = d.bow ? this._buildBow() : d.melee ? this._buildKnife() : this._buildFlower(d.look, key);
+      this.models[key] = d.melee ? this._buildKnife() : this._buildFlower(d.look, key);
       this._addPaws(this.models[key]);
       this.camera.add(this.models[key].group);
     }
@@ -364,18 +441,6 @@ class Viewmodel {
       p.curl(1.45);
       g.add(p);
       vm.paw = p;
-    } else if (vm.bow) {                                 // left paw on the grip, right paw on the string
-      const left = makePaw();
-      this._orientPaw(left, [-1, 0, 0], [0, -0.5, 0.87], 1.25, true);
-      left.position.set(-0.06, -0.02, -0.1);
-      left.curl(1.4);
-      g.add(left);
-      const right = makePaw();
-      this._orientPaw(right, [1, 0, 0], [0.2, -0.35, 1], 1.15);
-      right.curl(1.2);
-      g.add(right);
-      vm.paw = left;
-      vm.pullPaw = right;
     } else {                                             // right paw round the flower's grip
       const p = makePaw();
       this._orientPaw(p, [1, 0.25, 0], [0.45, -0.75, 1], 1.0);
@@ -455,7 +520,34 @@ class Viewmodel {
     const petalA = lam(look.petal, 14), petalB = lam(look.petal2, 15), center = lam(look.center, 16);
     const add = (...a) => this._box(...a);
     const len = look.long ? 0.75 : look.short ? 0.32 : 0.5;
-    add(g, 0.07, 0.07, len, stem, 0, 0, -(len - 0.5) / 2);         // stem body
+    const hushLen = look.hush ? 0.16 : 0;                          // the silencer sticks out in front
+    const stemMat = look.cactus ? lam(0x3f9a5a, 17) : stem;
+    if (look.twin) for (const x of [-0.03, 0.03]) add(g, 0.05, 0.06, len, stemMat, x, 0, -(len - 0.5) / 2);   // two barrels
+    else add(g, 0.07, 0.07, len, stemMat, 0, 0, -(len - 0.5) / 2);   // stem body
+    if (look.stripes) {                                            // bee stripes
+      const black = lam(0x2b2b33, 18);
+      for (const z of [-0.06, 0.02, 0.1].map(z => z - (len - 0.5) / 2)) add(g, 0.076, 0.076, 0.03, black, 0, 0, z);
+    }
+    if (look.cactus) {                                             // a revolver drum, and spines all over
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.09, 12), lam(0x2e7d32, 19));
+      drum.rotation.x = Math.PI / 2;
+      drum.position.set(0, 0.005, 0.02);
+      g.add(drum);
+      const spine = new THREE.MeshLambertMaterial({ color: 0xfffbe8, emissive: 0x333322 });
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2, z = 0.08 - (i % 5) * 0.075;
+        const sp = add(g, 0.006, 0.026, 0.006, spine, Math.cos(a) * 0.04, Math.sin(a) * 0.04, z);
+        sp.rotation.z = a - Math.PI / 2;
+      }
+    }
+    if (look.hush) {                                               // the silencer: a hollow sage-green reed
+      const front = 0.25 - len;
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, hushLen, 14), lam(0xb8cbb0, 20));
+      tube.rotation.x = Math.PI / 2;
+      tube.position.set(0, 0.002, front - hushLen / 2);
+      g.add(tube);
+      for (const k of [0.25, 0.75]) add(g, 0.092, 0.092, 0.012, lam(0x8fa688, 21), 0, 0.002, front - hushLen * k);   // reed joints
+    }
     add(g, 0.055, 0.15, 0.065, stemDark, 0, -0.1, 0.13);            // grip
     if (!look.short) add(g, 0.06, 0.06, 0.12, stemDark, 0, -0.01, 0.3);   // back end
     const leftLeaf = add(g, 0.16, 0.012, 0.08, leaf, -0.1, 0.01, 0.02);
@@ -465,16 +557,23 @@ class Viewmodel {
 
     // flower head (spins a little each shot)
     vm.head = new THREE.Group();
-    vm.head.position.set(0, 0.01, 0.25 - len - 0.05);
+    vm.head.position.set(0, 0.01, 0.25 - len - hushLen - 0.05);
     vm.head.scale.setScalar(look.size);
     g.add(vm.head);
     add(vm.head, 0.1, 0.1, 0.05, center, 0, 0, 0);
-    const petals = look.size > 1.1 ? 12 : 8;
+    const petals = look.size > 1.1 ? 12 : look.bell ? 6 : 8;
     for (let i = 0; i < petals; i++) {
       const a = (i / petals) * Math.PI * 2;
       const p = add(vm.head, 0.065, 0.11, 0.02, i % 2 ? petalA : petalB, Math.cos(a) * 0.1, Math.sin(a) * 0.1, 0.01);
       p.rotation.z = a - Math.PI / 2;
       if (look.cup) p.rotation.x = 0.6;                              // tulip cup shape
+      if (look.bell) p.rotation.x = 1.0;                             // a bluebell: closed up like a bell
+    }
+    if (look.bell) for (const z of [0.05, -0.1]) {                   // two little bells hanging off the stem
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), petalA);
+      b.rotation.x = Math.PI;
+      b.position.set(0.045, -0.05, z - (len - 0.5) / 2);
+      g.add(b);
     }
     vm.muzzleZ = vm.head.position.z - 0.04;
 
@@ -509,6 +608,10 @@ class Viewmodel {
       foot.position.y = 0.006;
       foot.renderOrder = 1;
       jar.add(foot);
+    }
+    if (v.tap) {                                       // the burette's little tap
+      const tapMat = new THREE.MeshLambertMaterial({ color: 0x5b8cff, emissive: 0x101830 });
+      add(jar, 0.04, 0.008, 0.008, tapMat, 0, 0.016, 0);
     }
     if (v.clamp) {                                     // a little clamp holding the test tube up
       const metal = new THREE.MeshLambertMaterial({ color: 0xc9d2dc, emissive: 0x15181c });
@@ -580,9 +683,13 @@ class Viewmodel {
     for (let i = 0; i < 4; i++) {                                       // fat toes round the bottle, beans + claws
       const y = 0.03 - i * 0.02;
       const len = i === 3 ? 0.042 : 0.05;
-      add(held, len, 0.024, 0.026, skin, -BW / 2 + len / 2 - 0.01, y, BW / 2 + 0.012);
-      add(held, 0.012, 0.012, 0.004, bean, -BW / 2 + len / 2 - 0.004, y, BW / 2 + 0.0005);
-      add(held, 0.01, 0.012, 0.007, nail, -BW / 2 + len - 0.01, y, BW / 2 + 0.026);
+      const toe = new THREE.Group();                                    // turns at its base (the top one points)
+      toe.position.set(-BW / 2 - 0.01, y, BW / 2 + 0.012);
+      held.add(toe);
+      add(toe, len, 0.024, 0.026, skin, len / 2, 0, 0);
+      add(toe, 0.012, 0.012, 0.004, bean, len / 2 + 0.006, 0, -0.0115);
+      add(toe, 0.01, 0.012, 0.007, nail, len, 0, 0.014);
+      if (i === 0) vm.pointer = toe;
     }
     add(held, 0.044, 0.026, 0.026, skin, -0.008, 0.022, -BW / 2 - 0.012);   // dewclaw
 
@@ -649,54 +756,6 @@ class Viewmodel {
     else if (!this.nadeKind) paw.visible = false;
   }
 
-  // Rose bow: green limbs with thorns, pink roses at the tips, a string that
-  // pulls back as you draw, and an arrow with a rosebud tip.
-  _buildBow() {
-    const vm = { bow: true };
-    const g = vm.group = new THREE.Group();
-    const lam = (c, e = 0) => new THREE.MeshLambertMaterial({ color: c, emissive: e });
-    const limb = lam(0x3f9a3a), thorn = lam(0x2e6b2a), rose = lam(0xff5d8f, 0x330815), leaf = lam(0x7bd66b);
-    const add = (...a) => this._box(...a);
-    // limbs: an arc in the x/y plane bulging forward (-z)
-    const pts = [];
-    for (let i = 0; i <= 8; i++) {
-      const t = i / 4 - 1;                          // -1..1
-      pts.push(new THREE.Vector3(0, t * 0.34, -0.13 * (1 - t * t)));
-    }
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      const mid = a.clone().add(b).multiplyScalar(0.5);
-      const seg = add(g, 0.035, a.distanceTo(b) + 0.01, 0.035, limb, mid.x, mid.y, mid.z);
-      seg.rotation.x = Math.atan2(b.z - a.z, b.y - a.y);   // tilt the box's length along the arc
-      if (i % 2 === 1) add(g, 0.012, 0.012, 0.03, thorn, mid.x + 0.02, mid.y, mid.z - 0.01);
-    }
-    add(g, 0.05, 0.1, 0.05, lam(0x6b4a2b), 0, 0, -0.13);              // grip
-    for (const s of [-1, 1]) {                                        // roses at both tips
-      add(g, 0.07, 0.07, 0.07, rose, 0, s * 0.35, 0);
-      add(g, 0.05, 0.02, 0.03, leaf, 0.03, s * 0.31, 0);
-    }
-    vm.tipTop = new THREE.Vector3(0, 0.35, 0);
-    vm.tipBot = new THREE.Vector3(0, -0.35, 0);
-    // string: two thin boxes from the tips to the nock point
-    const strMat = lam(0xffffff);
-    vm.strA = add(g, 0.006, 1, 0.006, strMat, 0, 0, 0);
-    vm.strB = add(g, 0.006, 1, 0.006, strMat, 0, 0, 0);
-    // arrow (points forward, -z)
-    vm.arrow = new THREE.Group();
-    g.add(vm.arrow);
-    add(vm.arrow, 0.018, 0.018, 0.62, lam(0x7bd66b), 0, 0, -0.31);
-    add(vm.arrow, 0.05, 0.05, 0.07, rose, 0, 0, -0.64);
-    add(vm.arrow, 0.04, 0.005, 0.06, leaf, 0, 0, -0.03);
-    add(vm.arrow, 0.005, 0.04, 0.06, leaf, 0, 0, -0.03);
-
-    g.scale.setScalar(0.48);
-    g.position.set(0.19, -0.15, -0.46);
-    g.rotation.set(0, 0.18, 0.25);      // angled in a little so you can see the arrow
-    vm.restPos = g.position.clone();
-    g.visible = false;
-    return vm;
-  }
-
   // Refill choreography, p = 0..1 through the refill:
   //   hand comes in → tips the bottle → the spout docks on the glass (clink) → squeezes…
   //   nothing comes out, harder, trembling… SPLURT! → pours → tips back → leaves
@@ -749,6 +808,7 @@ class Viewmodel {
     this.inspectT = 0;
     if (this.gun && this.gun.def.melee) { this.swingT = 0.32; return; }
     this.kick = this.gun && this.gun.def.pellets ? 2 : 1;
+    if (this.gun && this.gun.def.key === 'cactus') this.flip = 1;   // the revolver bucks up, cowboy style
     this.flashTime = 0.06;
     if (this.vm && this.vm.head) this.vm.head.rotation.z += 0.35;
   }
@@ -768,7 +828,6 @@ class Viewmodel {
     const bx = Math.sin(this.bobPhase) * 0.012 * bobAmt;
     const by = -Math.abs(Math.cos(this.bobPhase)) * 0.012 * bobAmt - this.swapT * 0.5;
 
-    if (vm.bow) { this._updateBow(vm, gun, bx, by); if (gun.charge > 0) this.inspectT = 0; this._applyInspect(g, dt); return; }
     if (vm.knife) {
       // swipe from right to left
       this.swingT = Math.max(0, (this.swingT || 0) - dt);
@@ -786,7 +845,7 @@ class Viewmodel {
     const t = reloading ? 1 - gun.reloading / gun.def.reloadTime : 0;
     // every refill picks a random little show (the classic pour, or one of the sassy ones)
     if (reloading && !this._wasReloading) {
-      this.reloadStyle = pickRefillStyle(this.reloadStyle);
+      this.reloadStyle = this.forcedStyle || pickRefillStyle(this.reloadStyle);   // (practice range: T picks it)
     }
     this._wasReloading = reloading;
     const sassy = reloading && this.reloadStyle !== 'pour';
@@ -806,11 +865,40 @@ class Viewmodel {
     const lean = reloading ? (sassy ? 0.35 * Math.sin(t * Math.PI) : ph.reach) : 0;
     g.position.set(vm.restPos.x + bx - lean * 0.02, vm.restPos.y + by - lean * 0.04, vm.restPos.z + this.kick * 0.05);
     g.rotation.set(this.kick * 0.06 + lean * 0.12, 0, lean * 0.22);
+    // Cactus Revolver: snaps up hard in a blink, then settles back down slowly before the next shot
+    this.flip = Math.max(0, (this.flip || 0) - dt / 0.4);
+    if (this.flip > 0) {
+      const u = 1 - this.flip;
+      const a = u < 0.12 ? u / 0.12 : 1 - ease01((u - 0.12) / 0.88);
+      g.rotation.x += a * 0.55;
+      g.rotation.z -= a * 0.12;
+      g.position.y += a * 0.035;
+      g.position.z += a * 0.05;
+    }
     this._applyInspect(g, dt);
     g.rotation.z += this.sassy.wobble;                  // something bumped the jar
     g.rotation.x += this.sassy.wobble * 0.4;
     if (sassy) this.sassy.play(this.reloadStyle, t, dt, vm);
     else this.sassy.hide(reloading ? dt : 0);
+    // the soap pour: she lifts one claw off the bottle and the lid levitates up off the glass,
+    // hovers aside, wobbling, while she pours… and floats back down with a clink
+    if (vm.pointer) vm.pointer.rotation.z = 0;
+    if (reloading && !sassy && vm.cork && vm.pointer) {
+      const lastP = this._pourT || 0, at = x => lastP < x && t >= x;
+      vm.pointer.rotation.z = 2.5 * ease01(span(t, 0.08, 0.15)) * (1 - ease01(span(t, 0.84, 0.9)));
+      const up = ease01(span(t, 0.13, 0.25)) * (1 - ease01(span(t, 0.8, 0.88)));
+      const c = vm.cork;
+      c.position.copy(vm.corkHome).add(this._v.set((vm.vessel.neckR + 0.05) * up, (0.08 + 0.006 * Math.sin(t * 14)) * up, -0.01 * up));
+      c.rotation.set(0.3 * up * Math.sin(t * 6), 5 * t * up, 0.25 * up + 0.12 * up * Math.cos(t * 5));
+      g.updateMatrixWorld(true);
+      if (at(0.13)) { Sound.clink(0.35); this.sassy._spark(g.localToWorld(vm.corkHome.clone()), 5); }
+      for (const x of [0.2, 0.34, 0.48, 0.62]) if (at(x)) {          // a little magic off her claw
+        vm.pointer.updateMatrixWorld(true);
+        this.sassy._spark(vm.pointer.localToWorld(this._v.set(0.05, 0, 0.014)).clone(), 2);
+        this.sassy._spark(c.getWorldPosition(this._v).clone(), 2);
+      }
+      if (at(0.88)) { Sound.clink(0.7); this.sassy._bump(1); }
+    }
 
     vm.hand.visible = reloading && ph.reach > 0.001;
     if (vm.supportPaw) vm.supportPaw.visible = !reloading;   // that paw is busy refilling
@@ -856,26 +944,5 @@ class Viewmodel {
         }
       }
     }
-  }
-
-  _updateBow(vm, gun, bx, by) {
-    const g = vm.group;
-    const pull = gun.charge;                                    // 0..1
-    const nockZ = 0.02 + pull * 0.26;
-    g.position.set(vm.restPos.x + bx, vm.restPos.y + by, vm.restPos.z + pull * 0.04);
-    g.rotation.set(0, 0.18, 0.25);      // angled in a little so you can see the arrow
-    // string from each tip to the nock point
-    const nock = new THREE.Vector3(0, 0, nockZ);
-    for (const [s, tip] of [[vm.strA, vm.tipTop], [vm.strB, vm.tipBot]]) {
-      const mid = tip.clone().add(nock).multiplyScalar(0.5);
-      s.position.copy(mid);
-      s.scale.y = tip.distanceTo(nock);
-      s.rotation.x = Math.atan2(nock.z - tip.z, nock.y - tip.y);
-    }
-    // arrow sits on the string; hidden while nocking the next one
-    const nocking = gun.reloading > 0;
-    vm.arrow.visible = gun.ammo > 0 && !nocking;
-    vm.arrow.position.z = nockZ;
-    if (vm.pullPaw) vm.pullPaw.position.set(0.045, -0.02, nockZ + 0.05);   // the paw that draws the string
   }
 }

@@ -1,5 +1,5 @@
 // The match: who's in it (you, bots, practice buddies), loadouts and buying,
-// shots and arrows hitting people, popping into pixels, spawning, and
+// shots hitting people, popping into pixels, spawning, and
 // characters bumping into each other.
 // The rules (rounds, Boo-Boo, money, respawns...) live in the game mode (modes.js).
 
@@ -77,6 +77,7 @@ class PlayerAgent {
 
   takeHit(dmg, part, attacker) {
     if (!this.alive) return false;
+    if (this.game.mode && this.game.mode.cheats) return false;   // practice range: nothing can pop you
     applyDamage(this, dmg);
     HUD.hurt(attacker, this);
     Sound.ouch();
@@ -99,7 +100,6 @@ class Game {
     this.playerTeam = 'blue';
     this.entities = [];
     this._v = new THREE.Vector3();
-    this.arrows = new Arrows(this);
     this.throwables = new Throwables(this);
     this.drops = new Drops(this);
     this.net = null;                     // set by NetHost / NetGuest once the game exists
@@ -173,8 +173,8 @@ class Game {
 
   canAfford(e, item) {
     if (GRENADES[item]) return this.mode.freeShop || e.money >= this.priceOf(item);
-    const refund = WEAPONS[item] ? (e.roundBuys.main ? this.priceOf(e.roundBuys.main) : 0)
-      : (e.roundBuys.shield ? this.priceOf(e.roundBuys.shield) : 0);
+    const was = WEAPONS[item] ? e.roundBuys[WEAPONS[item].slot] : e.roundBuys.shield;   // bought this phase: refunded
+    const refund = was ? this.priceOf(was) : 0;
     return this.mode.freeShop || e.money + refund >= this.priceOf(item);
   }
 
@@ -190,14 +190,15 @@ class Game {
       return true;
     }
     if (WEAPONS[item]) {
-      const def = WEAPONS[item];
-      if (e.guns.main && e.guns.main.def === def) { e.slot = 'main'; return false; }   // already have it
-      if (e.roundBuys.main) e.money += this.priceOf(e.roundBuys.main);
-      else e.roundBuys.prevMain = e.guns.main;          // what you had before, in case you sell it back
+      // a main blaster or a sidearm: it takes that slot (rb.main / rb.side = what you bought this phase)
+      const def = WEAPONS[item], s = def.slot, rb = e.roundBuys;
+      if (e.guns[s] && e.guns[s].def === def) { e.slot = s; return false; }   // already have it
+      if (rb[s]) e.money += this.priceOf(rb[s]);
+      else rb[s + 'Prev'] = e.guns[s];                   // what you had before, in case you sell it back
       e.money -= price;
       giveWeapon(e, item);
-      e.roundBuys.main = item;
-      e.roundBuys.mainGun = e.guns.main;
+      rb[s] = item;
+      rb[s + 'Gun'] = e.guns[s];
     } else {
       const s = SHIELDS[item];
       if (!e.roundBuys.shield) e.roundBuys.prevShield = e.shield;
@@ -224,11 +225,12 @@ class Game {
       e.nades[item]--;
       e.money += this.priceOf(item);
     } else if (WEAPONS[item]) {
-      if (rb.main !== item || e.guns.main !== rb.mainGun) return false;
+      const s = WEAPONS[item].slot;
+      if (rb[s] !== item || e.guns[s] !== rb[s + 'Gun']) return false;
       e.money += this.priceOf(item);
-      e.guns.main = rb.prevMain || null;
+      e.guns[s] = rb[s + 'Prev'] || (s === 'side' ? new Gun(WEAPONS.dandelion) : null);
       if (!e.guns.main && e.slot === 'main') e.slot = 'side';
-      rb.main = rb.mainGun = rb.prevMain = null;
+      rb[s] = rb[s + 'Gun'] = rb[s + 'Prev'] = null;
     } else if (SHIELDS[item]) {
       if (rb.shield !== item) return false;
       e.money += this.priceOf(item);
@@ -402,7 +404,7 @@ class Game {
     }
   }
 
-  // A shot, arrow or bubble bomb landed on someone. `weapon` = what did it (for the pop feed).
+  // A shot or bubble bomb landed on someone. `weapon` = what did it (for the pop feed).
   applyHit(shooter, target, part, dmg, point, dir, weapon) {
     if (this.mode.frozen || this.isGuest) return; // before GO, shots are just for practice (and the host decides hits)
     const out = target.takeHit(dmg, part, shooter);
@@ -493,13 +495,15 @@ class Game {
 
   // A gunshot: everyone hears it (you in 3D), bots get to know roughly where it came from.
   shotHeard(shooter, pos, key) {
-    if (!shooter.isPlayer) Sound.at(pos, 'shoot', this._volumeAt(pos), key);
+    // a silenced blaster (Hush Daisy, Hush Bloom) is only heard close by, and quietly
+    const hush = !!(WEAPONS[key] && WEAPONS[key].silenced), reach = hush ? 12 : 40;
+    if (!shooter.isPlayer) Sound.at(pos, 'shoot', this._volumeAt(pos) * (hush ? 0.6 : 1), key);
     // shooting gives you away: an enemy who fires near you shows as a red dot on your minimap
     const me = this.player;
-    if (me && me.alive && shooter.team !== me.team && shooter.team !== 'buddy' && me.pos.distanceTo(pos) < 40)
+    if (me && me.alive && shooter.team !== me.team && shooter.team !== 'buddy' && me.pos.distanceTo(pos) < reach)
       shooter.spottedUntil = Math.max(shooter.spottedUntil || 0, this.time + 1.5);
     for (const b of this.bots)
-      if (b.alive && b.team !== shooter.team && b.pos.distanceTo(pos) < 40) b.hear(pos.clone(), 'shot', shooter);
+      if (b.alive && b.team !== shooter.team && b.pos.distanceTo(pos) < reach) b.hear(pos.clone(), 'shot', shooter);
   }
 
   // Characters can't stand inside each other: gently push overlapping pairs apart.
@@ -536,7 +540,6 @@ class Game {
     for (const e of this.entities) if (e.mover) e.mover.speedMul = e.slot === 'knife' ? KNIFE_SPEED : 1;
     for (const b of this.bots) b.update(dt, frozen);
     for (const dm of this.dummies) dm.update(dt, this.camera);
-    this.arrows.update(dt);
     this.throwables.update(dt);
     this.drops.update(dt);
     for (const r of this.remotes) r.update(dt);
