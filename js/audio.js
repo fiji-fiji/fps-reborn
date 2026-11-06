@@ -292,6 +292,13 @@ const Sound = (() => {
       if (!on()) return;
       [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, 0.16, 'triangle', f, i * 0.06));
     },
+    // DOUBLE POP! and up: a little fanfare that climbs a note with every pop in the chain
+    multiPop(n) {
+      if (!on()) return;
+      const notes = [659, 784, 988, 1175, 1319], k = Math.min(n, 5);
+      for (let i = 0; i < k; i++) tone(notes[i], 0.14, 0.14, 'triangle', notes[i], i * 0.07);
+      tone(notes[k - 1] * 2, k === 5 ? 0.6 : 0.3, 0.1, 'sine', notes[k - 1] * 2, k * 0.07);
+    },
     // sparkly crunch of bursting into pixels
     shatter(vol = 1) {
       if (!on() || vol < 0.03) return;

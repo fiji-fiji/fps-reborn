@@ -17,6 +17,15 @@
 //
 // Loaded right after three.js, before the rest of the game, so it can swap the material type
 // before anything is built. Does nothing unless the HD look is picked.
+//
+// Opened straight from the folder (file://), browsers refuse to load the pictures and data
+// files, so index.html then loads assets/hd/offline.js (tools/hd/pack_offline.py): the same
+// files as data: URLs. HD_ASSET(path) gives whichever one the page can use, or null if neither.
+
+function HD_ASSET(path) {
+  if (typeof HD_OFFLINE !== 'undefined' && HD_OFFLINE[path]) return HD_OFFLINE[path];
+  return location.protocol === 'file:' ? null : path;
+}
 
 const HD = (() => {
   let on = false;
@@ -99,9 +108,11 @@ const HD = (() => {
     rot: { value: 0 }, meta: null,
   };
   function loadPhotoSky(done) {
-    fetch('assets/hd/sky.json').then(r => (r.ok ? r.json() : null)).then(meta => {
+    const meta = HD_ASSET('assets/hd/sky.json'), pic = HD_ASSET('assets/hd/sky.webp');
+    if (!meta || !pic) return;
+    fetch(meta).then(r => (r.ok ? r.json() : null)).then(meta => {
       if (!meta) return;
-      new THREE.TextureLoader().load('assets/hd/sky.webp', tex => {
+      new THREE.TextureLoader().load(pic, tex => {
         tex.encoding = THREE.sRGBEncoding;
         tex.wrapS = THREE.RepeatWrapping;
         tex.generateMipmaps = false;                 // (always magnified; mips would show the seam)
@@ -499,10 +510,10 @@ const HD = (() => {
       wm.roughness = 0.06; wm.metalness = 0; wm.opacity = 0.78; wm.envMapIntensity = 1.3;
       wm.color.set(0xdff4ff);
     }
-    if (location.protocol === 'file:') return;          // browsers block textures from file:// (use lan.py)
+    if (!HD_ASSET('assets/hd/atlas_albedo.webp')) return;   // (file:// without the offline pack)
     const loader = new THREE.TextureLoader();
     const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    const load = (name, srgb, done) => loader.load(`assets/hd/${name}.webp`, t => {
+    const load = (name, srgb, done) => loader.load(HD_ASSET(`assets/hd/${name}.webp`), t => {
       t.encoding = srgb ? THREE.sRGBEncoding : THREE.LinearEncoding;
       t.anisotropy = aniso;
       t.magFilter = THREE.LinearFilter;
@@ -563,11 +574,11 @@ const HD = (() => {
     return (crownGeos[key] = g);
   }
 
-  const crownLoad = location.protocol === 'file:' ? null
-    : fetch('assets/hd/crowns.json').then(r => (r.ok ? r.json() : null)).then(d => (crownData = d)).catch(() => null);
+  const crownLoad = !HD_ASSET('assets/hd/crowns.json') ? null
+    : fetch(HD_ASSET('assets/hd/crowns.json')).then(r => (r.ok ? r.json() : null)).then(d => (crownData = d)).catch(() => null);
 
   function crown(parent, kind, x, y, z, rng) {
-    if (!crownLoad) return false;                        // (no file loading from file://: classic crowns)
+    if (!crownLoad) return false;                        // (file:// without the offline pack: classic crowns)
     const pick = rng(), spin = rng() * Math.PI * 2;
     const holder = new THREE.Group();
     holder.position.set(x, y + (CROWN_DROP[kind] || 0), z);

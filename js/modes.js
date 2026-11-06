@@ -85,6 +85,7 @@ class StandardMode {
   startRound() {
     const g = this.game;
     this.round++;
+    HUD.newRound();
     const R = this.rules;
     const overtime = R.winByTwo && this.round > R.half * 2;
     let swapped = false;

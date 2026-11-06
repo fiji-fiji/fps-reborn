@@ -115,8 +115,8 @@ const HDWorld = (() => {
   const hexLinear = h => [srgbToLinear(((h >> 16) & 255) / 255), srgbToLinear(((h >> 8) & 255) / 255), srgbToLinear((h & 255) / 255)];
 
   let manifest = null;               // assets/hd/materials.json
-  const manifestLoad = location.protocol === 'file:' ? Promise.resolve(null)
-    : fetch('assets/hd/materials.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
+  const manifestLoad = !HD_ASSET('assets/hd/materials.json') ? Promise.resolve(null)
+    : fetch(HD_ASSET('assets/hd/materials.json')).then(r => (r.ok ? r.json() : null)).catch(() => null);
 
   // ---------------------------------------------------------------------------------------
   // Shared shader bits (uniforms are shared objects: set once, every material sees it)
@@ -640,7 +640,7 @@ const HDWorld = (() => {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const A = new Uint8Array(S * S * 4 * NL), Nn = new Uint8Array(S * S * 4 * NL);
     const pixels = async url => {
-      const blob = await (await fetch(url)).blob();
+      const blob = await (await fetch(HD_ASSET(url))).blob();
       const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
       ctx.clearRect(0, 0, S, S);
       ctx.drawImage(bmp, 0, 0, S, S);

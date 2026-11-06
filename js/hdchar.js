@@ -22,8 +22,8 @@ const HDChar = (() => {
   const TYPES = { float32: Float32Array, int8: Int8Array, uint8: Uint8Array, uint16: Uint16Array, uint32: Uint32Array };
   async function load(sp) {
     const [meta, buf] = await Promise.all([
-      fetch(`assets/hd/char/${sp}.json`).then(r => { if (!r.ok) throw new Error(sp); return r.json(); }),
-      fetch(`assets/hd/char/${sp}.bin`).then(r => { if (!r.ok) throw new Error(sp); return r.arrayBuffer(); }),
+      fetch(HD_ASSET(`assets/hd/char/${sp}.json`)).then(r => { if (!r.ok) throw new Error(sp); return r.json(); }),
+      fetch(HD_ASSET(`assets/hd/char/${sp}.bin`)).then(r => { if (!r.ok) throw new Error(sp); return r.arrayBuffer(); }),
     ]);
     const get = name => { const l = meta.layout[name]; return new TYPES[l.type](buf, l.offset, l.count); };
     const n = meta.vertices;

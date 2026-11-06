@@ -88,6 +88,27 @@ kbd {
 #bannerTitle { font-size: 3.2rem; letter-spacing: .06em; }
 #bannerSub { font-size: 1.3rem; color: #fff; margin-top: .4rem; }
 
+/* your pops: POP! / DOUBLE POP! … / ACE! (bottom middle, pops in and fades out) */
+#popBanner {
+  position: absolute; left: 50%; bottom: 13.5rem; transform: translateX(-50%);
+  display: none; text-align: center; white-space: nowrap;
+  text-shadow: 0 .2rem 0 #000, 0 0 1rem rgba(0,0,0,.5);
+}
+#popBanner.show { display: block; animation: popBanner 1.8s ease-out forwards; }
+#popTitle { font-size: 2.3rem; letter-spacing: .08em; color: #fff; }
+#popBanner.n2 #popTitle { color: var(--mint); }
+#popBanner.n3 #popTitle { color: var(--blue); }
+#popBanner.n4 #popTitle { color: var(--gold); }
+#popBanner.n5 #popTitle { color: var(--pink); font-size: 3.2rem; text-shadow: 0 .2rem 0 #000, 0 0 1.5rem var(--pink); }
+#popSub { font-size: 1.05rem; color: #fff; margin-top: .1rem; }
+@keyframes popBanner {
+  0% { opacity: 0; transform: translateX(-50%) scale(.5); }
+  12% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+  24% { transform: translateX(-50%) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
+
 /* what to do next (big friendly pill) + plant/uproot progress */
 #hint {
   position: absolute; left: 50%; bottom: 7.5rem; transform: translateX(-50%);

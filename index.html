@@ -54,6 +54,7 @@
 
     <div id="action"><div id="actionLabel"></div><div class="bar"><div id="actionFill"></div></div></div>
     <div id="hint"></div>
+    <div id="popBanner"><div id="popTitle"></div><div id="popSub"></div></div>
 
     <div id="money" class="box"><span id="moneyIcon"></span> <span id="moneyNum">0</span> <span id="moneyGain"></span></div>
     <div id="healthBox" class="box">
@@ -185,6 +186,7 @@
   </div>
 
   <script src="lib/three.min.js"></script>
+  <script>if (location.protocol === 'file:') document.write('<script src="assets/hd/offline.js"><\/script>');</script>   <!-- HD assets packed for playing straight from the folder -->
   <script src="js/hd.js"></script>
   <script src="js/textures.js"></script>
   <script src="js/world.js"></script>

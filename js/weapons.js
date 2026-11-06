@@ -790,7 +790,10 @@ class Viewmodel {
     if (kind !== this.nadeKind) { this.nadeKind = kind; this.swapT = 0.3; }
   }
 
-  // grenade in hand: bob along, wind up after a throw
+  // grenade in hand: bob along, wind up after a throw… and fiddle with it while waiting:
+  //   Bubble Bomb — squished like a stress ball, then it wobbles back into shape
+  //   Sparkle Pop — flicked into a twirl on the paw, spinning down until the next flick
+  //   Cloud Puff  — tossed up a little, flips over, and lands back in the paw
   updateNade(dt, mover) {
     const m = this.nadeModels && this.nadeModels[this.nadeKind];
     if (!m) return;
@@ -799,9 +802,44 @@ class Viewmodel {
     const speed = mover.onGround ? mover.horizontalSpeed : 0;
     this.bobPhase += dt * speed * 1.6;
     const bob = Math.sin(this.bobPhase) * 0.01 * Math.min(1, speed / PLAYER.runSpeed);
+    const paw = this._holdPaw();
     m.position.set(0.2 + bob, -0.17 - this.swapT * 0.5 - this.kick * 0.3, -0.45);
     m.rotation.set(0.2, 0.5, 0);
-    this._holdPaw().position.set(0.21 + bob, -0.222 - this.swapT * 0.5 - this.kick * 0.3, -0.42);
+    m.scale.setScalar(0.42);
+    paw.position.set(0.21 + bob, -0.222 - this.swapT * 0.5 - this.kick * 0.3, -0.42);
+    // the fiddling waits while the grenade comes up or gets thrown
+    if (this.swapT > 0 || this.kick > 0) { this.fiddleT = -0.5; this.twirl = 0; return; }
+    const f = (this.fiddleT = (this.fiddleT || 0) + dt);
+    if (f < 0) return;
+    const ease = t => t * t * (3 - 2 * t);
+    if (this.nadeKind === 'frag') {
+      const u = f % 2.6;
+      let s = 0;
+      if (u < 0.4) s = ease(u / 0.4) * 0.28;                                               // squeeze…
+      else if (u < 0.55) s = 0.28 * (1 - (u - 0.4) / 0.15);                                // let go
+      else if (u < 1.6) s = Math.sin((u - 0.55) * 26) * 0.09 * Math.exp(-(u - 0.55) * 3.5);   // wobbles back
+      m.scale.set(0.42 * (1 + s), 0.42 * (1 - s), 0.42 * (1 + s));
+      m.position.y -= s * 0.02;
+      paw.position.y -= Math.max(0, s) * 0.012;
+    } else if (this.nadeKind === 'flash') {
+      const u = f % 3.2;
+      this.twirl = (this.twirl || 0) + dt * 16 * Math.exp(-u * 1.7);                        // a flick, spinning down
+      m.rotation.y += this.twirl;
+      m.rotation.x += Math.sin(this.twirl * 0.5) * 0.12;
+      m.position.y += Math.sin(this.twirl) * 0.003;
+    } else {
+      const u = f % 2.8;                                                                   // toss & catch
+      if (u < 0.75) {
+        const t = u / 0.75;
+        m.position.y += 4 * t * (1 - t) * 0.1;
+        m.rotation.z += t * Math.PI * 2;
+        m.rotation.x += Math.sin(t * Math.PI) * 0.4;
+        paw.position.y += t < 0.15 ? ease(t / 0.15) * 0.015 : t < 0.5 ? 0.015 * (1 - ease((t - 0.15) / 0.35)) : 0;   // the push up
+      } else if (u < 0.95) {
+        const dip = Math.sin((u - 0.75) / 0.2 * Math.PI) * 0.012;                          // the catch dips the paw
+        paw.position.y -= dip; m.position.y -= dip;
+      }
+    }
   }
 
   onFire() {
