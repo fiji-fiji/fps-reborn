@@ -171,6 +171,7 @@
   HUD.init(game);
   const me = game.player;
   const viewmodel = new Viewmodel(viewCamera);
+  HUD.popHat = new PopHat(viewCamera, me.model);        // your hat pops up with stars when you pop someone
 
   window.game = { scene, world, game, me, mapInfo, effects, renderer, viewmodel }; // handy for debugging in the browser console
 

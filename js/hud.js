@@ -35,7 +35,6 @@ const HUD = {
       score: $('score'), scoreA: $('scoreA'), scoreB: $('scoreB'), roleA: $('roleA'), roleB: $('roleB'),
       timer: $('timer'), roundNo: $('roundNo'), aliveA: $('aliveA'), aliveB: $('aliveB'),
       banner: $('banner'), bannerTitle: $('bannerTitle'), bannerSub: $('bannerSub'),
-      popBanner: $('popBanner'), popTitle: $('popTitle'), popSub: $('popSub'),
       hint: $('hint'), action: $('action'), actionLabel: $('actionLabel'), actionFill: $('actionFill'),
       carry: $('carry'), spectate: $('spectate'), markers: $('markers'),
       feed: $('feed'), hurt: $('hurt'), hurtDir: $('hurtDir'),
@@ -53,7 +52,6 @@ const HUD = {
     this.flashHintLeft = 0;
     this.gainLeft = 0;
     this.popChain = 0; this.popAt = -99; this.roundPops = 0;   // (rounds: set by newRound, before and after this)
-    this.el.popBanner.onanimationend = () => { this.el.popBanner.className = ''; };
     this.markerEls = [];
     this.el.score.style.display = game.mode.hud() ? 'flex' : 'none';
   },
@@ -101,8 +99,9 @@ const HUD = {
     if (attacker && attacker.isPlayer && victim.team !== attacker.team) this.popBanner(victim, head);
   },
 
-  // Your pops, at the bottom of the screen: POP! — then DOUBLE POP!, TRIPLE POP!, QUADRA POP!
-  // for pops in quick succession (within 8 s of the last), and ACE! for all five in a round.
+  // Your pops: your hat pops up at the bottom of the screen with a star on it (pophat.js),
+  // one star more for each pop in quick succession (within 8 s of the last), five for an ace
+  // (all five in a round). main.js gives us the hat (HUD.popHat).
   newRound() { this.roundPops = 0; this.popChain = 0; this.rounds = true; },
   popBanner(victim, head) {
     const now = performance.now() / 1000;
@@ -110,13 +109,7 @@ const HUD = {
     this.popAt = now;
     this.roundPops++;
     const n = this.rounds && this.roundPops === 5 ? 5 : Math.min(this.popChain, 5);
-    const title = ['POP!', 'DOUBLE POP!', 'TRIPLE POP!', 'QUADRA POP!', 'ACE!'][n - 1];
-    const el = this.el.popBanner;
-    el.className = '';
-    void el.offsetWidth;                                   // (so the animation starts over)
-    this.el.popTitle.textContent = title;
-    this.el.popSub.innerHTML = `<span style="color:${TEAM_CSS[victim.team]}">${victim.name}</span>${head ? ' · bullseye' : ''}`;
-    el.className = `show n${n}`;
+    if (this.popHat) this.popHat.show(n);
     if (n > 1) Sound.multiPop(n);
   },
 
@@ -235,6 +228,7 @@ const HUD = {
   },
 
   update(dt, me, mode, view) {
+    if (this.popHat) this.popHat.update(dt);
     this.hitTime = Math.max(0, this.hitTime - dt);
     this.dmgTime = Math.max(0, this.dmgTime - dt);
     this.hurtTime = Math.max(0, this.hurtTime - dt);
