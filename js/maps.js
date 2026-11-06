@@ -663,6 +663,146 @@ const MAPS = {
       };
     },
   },
+  // ------------------------------------------------------------------
+  // The 1v1 maps: tiny, but full of corners to hide round and lanes to watch.
+  // The Backyard: a walled garden. A shed in the middle with a door on every side,
+  // four lanes round the edge behind garden walls (one gap each), two patios for the
+  // sites (A north-west, B south-east), you start south-west, the cat north-east.
+  yard: {
+    name: 'The Backyard',
+    duel: true,
+    size: [32, 12, 32],
+    build(w) {
+      const S = w.sx, G = 1, decor = [];
+      const wall = (x0, z0, x1, z1, h = 5, m = B.bricks) => w.fill(x0, G, z0, x1, G + h - 1, z1, m);
+      const gap = (x0, z0, x1, z1, h = 2) => w.fill(x0, G, z0, x1, G + h - 1, z1, 0);
+      w.fill(0, 0, 0, S - 1, 0, S - 1, B.grass);
+      w.fill(3, 0, 3, 10, 0, 10, B.plaza);                // patio A
+      w.fill(21, 0, 21, 28, 0, 28, B.plaza);              // patio B
+      w.fill(1, 0, 24, 7, 0, 30, B.gravel);               // your corner
+      w.fill(24, 0, 1, 30, 0, 7, B.gravel);               // the cat's corner
+      // the garden wall all round
+      wall(0, 0, S - 1, 0, 6); wall(0, S - 1, S - 1, S - 1, 6); wall(0, 0, 0, S - 1, 6); wall(S - 1, 0, S - 1, S - 1, 6);
+      // the shed: hollow, a door on each side, a peek window at each corner, a roof
+      wall(12, 12, 19, 19, 4, B.planks);
+      w.fill(13, G, 13, 18, G + 3, 18, 0);
+      gap(15, 12, 16, 12); gap(15, 19, 16, 19); gap(12, 15, 12, 16); gap(19, 15, 19, 16);
+      for (const [x, z] of [[13, 12], [18, 19], [12, 18], [19, 13]]) w.set(x, G + 2, z, 0);
+      w.fill(12, G + 4, 12, 19, G + 4, 19, B.terracotta);
+      // four lane walls: long lanes along the edges, one gap in each wall
+      wall(6, 11, 6, 22, 3); gap(6, 16, 6, 17);           // west lane  (you -> A)
+      wall(11, 6, 22, 6, 3); gap(16, 6, 17, 6);           // north lane (A -> the cat)
+      wall(25, 9, 25, 20, 3); gap(25, 14, 25, 15);        // east lane  (the cat -> B)
+      wall(9, 25, 20, 25, 3); gap(14, 25, 15, 25);        // south lane (you -> B)
+      // corners to hide round: short walls, nooks, pillars
+      wall(21, 12, 23, 12, 3, B.stone); wall(23, 12, 23, 14, 3, B.stone);      // an L by the shed's north-east
+      wall(8, 19, 10, 19, 3, B.stone); wall(8, 17, 8, 19, 3, B.stone);         // ...and south-west
+      wall(9, 9, 9, 10, 3, B.stone); wall(10, 10, 12, 10, 3, B.stone);         // patio A's corner
+      wall(22, 21, 22, 22, 3, B.stone); wall(19, 21, 21, 21, 3, B.stone);      // patio B's corner
+      for (const [x, z] of [[9, 13], [22, 9], [22, 18], [9, 22], [3, 13], [28, 18], [13, 3], [18, 28]]) wall(x, z, x, z, 4, B.palm_log);
+      // low cover: hedges to crouch behind and peek over, crates
+      w.fill(13, G, 8, 18, G, 8, B.hedge); w.fill(13, G, 23, 18, G, 23, B.hedge);
+      w.fill(8, G, 13, 8, G, 15, B.hedge); w.fill(23, G, 16, 23, G, 18, B.hedge);
+      w.fill(3, G, 17, 3, G, 18, B.crate); w.set(3, G + 1, 17, B.crate);
+      w.fill(27, G, 13, 28, G, 13, B.crate); w.set(28, G + 1, 13, B.crate);
+      w.fill(16, G, 2, 17, G, 2, B.crate); w.set(16, G + 1, 2, B.crate);
+      w.fill(14, G, 29, 15, G, 29, B.crate); w.set(15, G + 1, 29, B.crate);
+      w.fill(5, G, 5, 6, G, 6, B.crate); w.set(5, G + 1, 5, B.crate);        // on the patios
+      w.fill(25, G, 25, 26, G, 26, B.crate); w.set(26, G + 1, 26, B.crate);
+      w.fill(4, G, 9, 4, G, 9, B.trencadis); w.fill(27, G, 22, 27, G, 22, B.trencadis);   // planters
+      orangeTree(w, 2, G, 2, decor); orangeTree(w, 29, G, 29, decor);
+      paintLetter(w, 'A', 4, G + 4, 1, B.paint_pink);
+      paintLetter(w, 'B', 23, G + 4, S - 2, B.paint_teal);
+      return {
+        spawn: { x: 4.5, y: G, z: 27.5, yaw: -Math.PI / 4 },
+        decor,
+        spawns: {
+          attack: { x0: 1, z0: 24, x1: 7, z1: 30, yaw: -Math.PI / 4 },    // south-west, facing the middle
+          defend: { x0: 24, z0: 1, x1: 30, z1: 7, yaw: 3 * Math.PI / 4 },  // north-east
+        },
+        sites: {
+          A: { x0: 3, z0: 3, x1: 10, z1: 10, entrances: [[7, 12], [12, 7], [6.5, 16.5]], via: [[3, 15], [8, 12]] },
+          B: { x0: 21, z0: 21, x1: 28, z1: 28, entrances: [[24, 19], [19, 24], [25.5, 14.5]], via: [[15, 28], [22, 19]] },
+        },
+        mid: [[15, 10], [10, 15], [21, 15], [15, 21]],
+        midWatch: [[6, 16], [16, 6], [25, 15], [15, 25]],
+        points: [
+          [7, 7], [8, 9], [24, 24], [27, 26],                 // the patios
+          [15, 9], [9, 15], [22, 16], [16, 22], [15, 15],     // round and in the shed
+          [3, 12], [3, 20], [12, 3], [20, 3],                 // the lanes
+          [28, 12], [28, 20], [12, 28], [20, 28],
+          [4, 27], [27, 4],                                   // the corners
+        ],
+      };
+    },
+  },
+  // Backstreets: four little houses and the alleys between them. Two of the houses are
+  // courtyards (the sites: A north-west, B south-east), with a door on two sides. Long
+  // straight alleys to watch, and porches, stalls and crates to tuck into.
+  alleys: {
+    name: 'Backstreets',
+    duel: true,
+    size: [36, 14, 36],
+    build(w) {
+      const S = w.sx, G = 1;
+      const rng = makeRng(11);
+      w.fill(0, 0, 0, S - 1, 0, S - 1, B.cobble);
+      w.fill(0, G, 0, S - 1, 8, 0, B.bricks); w.fill(0, G, S - 1, S - 1, 8, S - 1, B.bricks);
+      w.fill(0, G, 0, 0, 8, S - 1, B.bricks); w.fill(S - 1, G, 0, S - 1, 8, S - 1, B.bricks);
+      const looks = [[B.bcn_ochre, B.bcn_ochre_plain], [B.bcn_pink, B.bcn_pink_plain], [B.bcn_cream, B.bcn_cream_plain]];
+      const house = (x0, z0, x1, z1, top) => {
+        const look = looks[Math.floor(rng() * looks.length)];
+        for (let x = x0; x <= x1; x++)
+          for (let z = z0; z <= z1; z++)
+            for (let y = G; y <= top; y++)
+              w.set(x, y, z, y === G ? B.plinth : y === top ? B.terracotta : (y - G) % 3 === 1 && (x * 7 + z * 3) % 5 === 0 ? look[0] : look[1]);
+      };
+      house(4, 4, 14, 14, 7); house(21, 4, 31, 14, 8); house(4, 21, 14, 31, 8); house(21, 21, 31, 31, 7);
+      const carve = (x0, z0, x1, z1, h = 8) => w.fill(x0, G, z0, x1, G + h - 1, z1, 0);
+      // the two corner houses become courtyards (the sites), a door on two sides and a window
+      carve(6, 6, 12, 12); carve(13, 9, 14, 10, 2); carve(9, 13, 10, 14, 2); w.set(13, G + 2, 6, 0); w.set(14, G + 2, 6, 0);
+      carve(23, 23, 29, 29); carve(21, 25, 22, 26, 2); carve(25, 21, 26, 22, 2); w.set(21, G + 2, 29, 0); w.set(22, G + 2, 29, 0);
+      // your corner and the cat's corner: a bite out of the other two houses
+      carve(4, 27, 9, 31); carve(26, 4, 31, 8);
+      // porches: little nooks in the house walls along the alleys
+      for (const [x0, z0, x1, z1] of [[14, 24, 14, 25], [21, 10, 21, 11], [10, 21, 11, 21], [24, 14, 25, 14], [4, 16, 4, 16], [31, 19, 31, 19], [17, 4, 17, 4], [18, 31, 18, 31]])
+        carve(x0, z0, x1, z1, 2);
+      // cover in the alleys: a stall at the crossing, crates, planters, a hedge
+      stall(w, 16, 16, 19, 19, G, B.cloth_red);
+      w.fill(17, G, 9, 18, G, 9, B.crate); w.set(17, G + 1, 9, B.crate);
+      w.fill(17, G, 26, 18, G, 26, B.crate); w.set(18, G + 1, 26, B.crate);
+      w.fill(2, G, 17, 2, G, 18, B.crate); w.set(2, G + 1, 18, B.crate);
+      w.fill(33, G, 17, 33, G, 18, B.crate); w.set(33, G + 1, 17, B.crate);
+      w.fill(9, G, 2, 10, G, 2, B.crate); w.fill(25, G, 33, 26, G, 33, B.crate);
+      w.fill(16, G, 2, 19, G, 2, B.hedge); w.fill(16, G, 33, 19, G, 33, B.hedge);
+      w.set(2, G, 9, B.trencadis); w.set(33, G, 26, B.trencadis);
+      w.set(15, G, 15, B.trencadis); w.set(20, G, 20, B.trencadis);
+      w.fill(8, G, 8, 9, G, 8, B.crate); w.set(27, G, 27, B.crate); w.set(27, G + 1, 27, B.crate);   // in the courtyards
+      // striped awnings over the side alleys
+      w.fill(15, G + 3, 6, 20, G + 3, 8, B.cloth_teal); w.fill(15, G + 3, 27, 20, G + 3, 29, B.cloth_yellow);
+      paintLetter(w, 'A', 7, G + 5, 4, B.paint_pink);
+      paintLetter(w, 'B', 24, G + 5, S - 5, B.paint_teal);
+      return {
+        spawn: { x: 5.5, y: G, z: 30.5, yaw: -Math.PI / 4 },
+        spawns: {
+          attack: { x0: 1, z0: 27, x1: 9, z1: 34, yaw: -Math.PI / 4 },     // south-west
+          defend: { x0: 26, z0: 1, x1: 34, z1: 8, yaw: 3 * Math.PI / 4 },   // north-east
+        },
+        sites: {
+          A: { x0: 6, z0: 6, x1: 12, z1: 12, entrances: [[10, 16], [16, 10], [2, 10]], via: [[2, 20], [10, 17]] },
+          B: { x0: 23, z0: 23, x1: 29, z1: 29, entrances: [[19, 25.5], [25.5, 19], [33, 25]], via: [[14, 32], [19, 26]] },
+        },
+        mid: [[17, 13], [15, 11], [20, 24], [11, 17], [24, 18]],
+        midWatch: [[17, 3], [17, 32], [3, 17], [32, 17], [17, 17]],
+        points: [
+          [9, 9], [8, 11], [26, 26], [27, 24],                // the courtyards
+          [17, 14], [17, 10], [17, 25], [10, 17], [25, 17],   // the crossing and the four alleys
+          [2, 10], [2, 26], [33, 9], [33, 25], [12, 2], [26, 2], [9, 33], [23, 33],   // the ring round the outside
+          [5, 30], [30, 5],                                   // the corners
+        ],
+      };
+    },
+  },
 };
 
 // A little orange tree: a short trunk (solid) with a round crown full of oranges (decoration).

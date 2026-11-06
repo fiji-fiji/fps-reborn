@@ -164,6 +164,7 @@ const Sound = (() => {
     boop(p = 1) { if (!on()) return; tone(500 * p, 0.12, 0.2, 'sine', 900 * p); },
     oops() { if (!on()) return; tone(900, 0.12, 0.12, 'triangle', 600); tone(700, 0.15, 0.1, 'triangle', 450, 0.1); },
     corkPop() { if (!on()) return; tone(900, 0.06, 0.3, 'sine', 300); noise(0.05, 2500, 0.25, 'highpass'); },
+    spit() { if (!on()) return; noise(0.07, 900, 0.3, 'lowpass'); tone(260, 0.09, 0.15, 'sine', 110); },   // ptoo!
     plop() { if (!on()) return; tone(300, 0.1, 0.25, 'sine', 900); noise(0.08, 1200, 0.08, 'lowpass', 0.03); },
     // ---- planting shows ----
     stab(vol = 1) { if (!on() || vol < 0.05) return; tone(160, 0.08, 0.3 * vol, 'triangle', 90); noise(0.06, 800, 0.2 * vol, 'lowpass'); },

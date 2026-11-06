@@ -80,7 +80,7 @@
   const params = new URLSearchParams(location.search);
   const choose = (name, allowed, fallback) => (allowed.includes(params.get(name)) ? params.get(name) : fallback);
   let MAP_ID = choose('map', Object.keys(MAPS), 'barcelona');
-  let MODE = choose('mode', ['standard', 'swiftplay', 'skirmish'], 'standard');
+  let MODE = choose('mode', ['standard', 'swiftplay', 'skirmish', 'duel'], 'standard');
   let BOTS = choose('bots', Object.keys(BOT_LEVELS), 'easy');
   const NET = Net.detect();
 
@@ -112,6 +112,11 @@
         }
         const next = new URLSearchParams({ map: MAP_ID, mode: MODE, bots: BOTS });
         next.set(param, b.dataset.value);
+        // the 1v1 mode goes with the tiny duel maps (and they go with it)
+        const duelMap = id => !!(MAPS[id] && MAPS[id].duel), firstDuel = Object.keys(MAPS).find(duelMap);
+        if (param === 'mode' && b.dataset.value === 'duel' && !duelMap(MAP_ID)) next.set('map', firstDuel);
+        if (param === 'map' && duelMap(b.dataset.value) && MODE !== 'duel') next.set('mode', 'duel');
+        if (param === 'map' && !duelMap(b.dataset.value) && b.dataset.value !== 'garden' && MODE === 'duel') next.set('mode', 'standard');
         if (NET === 'host') next.set('lan', 'host');
         location.search = next.toString();             // restarts with the new settings
       });
@@ -320,7 +325,7 @@
   function switchTo(slot) {
     if (me.slot === slot) return;
     if (slot === 'seed') {
-      if (!me.carrying) { HUD.flashHint("You don't have the seed"); return; }
+      if (!me.carrying) { HUD.flashHint("You don't have the Boo-Boo"); return; }
     } else if (!me.guns[slot]) return;
     me.slot = slot;
     if (me.guns[slot]) me.gun.cooldown = Math.max(me.gun.cooldown, 0.35);   // takes a moment to bring it up

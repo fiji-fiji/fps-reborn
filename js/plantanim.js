@@ -1,5 +1,5 @@
 // The planting show, played in the world right in front of whoever is planting.
-// Every plant picks one of ten little shows (never the same twice in a row). They all
+// Only karate plays (PLANT_STYLES); the other nine are kept here, parked. They all
 // share the same beats: dig a hole → the seed goes in → cover it → a tiny sprout pops out.
 // When it finishes, the real Boo-Boo tree takes over at the same spot.
 //
@@ -15,7 +15,7 @@
 //   teacup  — digs with her teacup, waters the seed with the tea, then takes a sip
 //   perfume — dainty one-finger flicks, then a spritz of perfume on the sprout
 
-const PLANT_STYLES = ['shovel', 'paws', 'spoon', 'claws', 'heel', 'karate', 'card', 'drill', 'teacup', 'perfume'];
+const PLANT_STYLES = ['karate'];   // the ones that play (parked: shovel, paws, spoon, claws, heel, card, drill, teacup, perfume)
 // when the hole is dug, the seed is in, and the hole is covered (the sprout pops after that)
 const PLANT_TIMING = { quick: [0.36, 0.48, 0.62], normal: [0.45, 0.6, 0.85] };
 const PLANT_FINALE = { paws: 1, claws: 1, card: 1, drill: 1, teacup: 1, perfume: 1 };   // these have an extra bit at the end
@@ -170,7 +170,7 @@ class PlantAnim {
     this.planter = e;
     const c = pawColors(e);
     for (const h of [this.hand, this.handB]) { h.setFur(c.fur); h.setSleeve(c.sleeve); }
-    const options = PLANT_STYLES.filter(s => s !== this.style);
+    const options = PLANT_STYLES.length > 1 ? PLANT_STYLES.filter(s => s !== this.style) : PLANT_STYLES;
     this.style = this.forceStyle || options[Math.floor(Math.random() * options.length)];
     this.nailOff = false;
     this.nailPos = null;

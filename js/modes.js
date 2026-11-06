@@ -20,6 +20,8 @@ const ROUND = {
 const CLOSE_RANGE_GUNS = ['sunflower', 'tulip', 'pansy', 'buzzy'];   // blasters that want to fight up close
 const closeRangeGun = bot => !!(bot.gun && CLOSE_RANGE_GUNS.includes(bot.gun.def.key));
 const SWIFTPLAY = { name: 'Swiftplay', toWin: 5, half: 4, winByTwo: false };
+// 1v1: you against one cat, Swiftplay rules, on the tiny duel maps (maps.js: duel: true)
+const DUEL = { name: '1v1', toWin: 5, half: 4, winByTwo: false };
 const ECON = { start: 800, win: 3000, loss: [1900, 2400, 2900], pop: 200, plant: 300 };
 
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -164,7 +166,7 @@ class StandardMode {
     const mySide = this.sideOf(g.playerTeam);
     let title = `ROUND ${this.round}`;
     if (overtime) title += ' · OVERTIME';
-    let sub = mySide === 'attack' ? 'Your team ATTACKS: plant the seed on A or B' : 'Your team DEFENDS: stop them planting the seed';
+    let sub = mySide === 'attack' ? 'Your team ATTACKS: plant the Boo-Boo on A or B' : 'Your team DEFENDS: stop them planting the Boo-Boo';
     if (swapped && halftime) sub = 'Halftime! Teams switched sides. ' + sub;
     for (const t of ['blue', 'red']) {
       const s = this.score[t] + 1, o = this.score[otherTeam(t)];
@@ -274,7 +276,7 @@ class StandardMode {
         this._planting(dt);
         if (this.phase !== 'live') break;
         // timer at 0:00: the round only ends once nobody is mid-plant
-        if (this.timeLeft === 0 && !this.planter) { this.endRound(this.defendTeam, "Time's up, no seed was planted"); break; }
+        if (this.timeLeft === 0 && !this.planter) { this.endRound(this.defendTeam, "Time's up, no Boo-Boo was planted"); break; }
         this._eliminations();
         break;
 
@@ -349,7 +351,7 @@ class StandardMode {
       e.carrying = true;
       e.hadSeed = true;
       this.version++;
-      if (e.isPlayer) { HUD.flashHint('You picked up the seed!'); Sound.pickup(); }
+      if (e.isPlayer) { HUD.flashHint('You picked up the Boo-Boo!'); Sound.pickup(); }
       break;
     }
   }
@@ -382,7 +384,7 @@ class StandardMode {
     if (this.phase === 'end') {                   // after the round: the tree grows a bit, nothing else changes
       this.funPlant = true;
       Sound.planted();
-      if (c.isPlayer) HUD.flashHint('Seed planted, just for fun!');
+      if (c.isPlayer) HUD.flashHint('Boo-Boo planted, just for fun!');
       return;
     }
     this.plantedSite = site;
@@ -393,7 +395,7 @@ class StandardMode {
     this.version++;
     for (const e of this.members(this.attackTeam)) this._pay(e, ECON.plant);
     const att = this.sideOf(this.game.playerTeam) === 'attack';
-    HUD.banner(`SEED PLANTED ON ${site}`, att ? 'Protect the tree until it blooms!' : 'Go uproot it before it blooms!', 3, '#7fffd4');
+    HUD.banner(`BOO-BOO PLANTED ON ${site}`, att ? 'Protect the tree until it blooms!' : 'Go uproot it before it blooms!', 3, '#7fffd4');
     Sound.planted();
   }
 
@@ -593,21 +595,21 @@ class StandardMode {
     if (me.alive && this.phase === 'end' && me.carrying && this.siteAt(me.pos)) return "Round's over, but you can still plant it! Hold [4]";
     if (!me.alive || this.phase === 'end') return '';
     if (this.sideOf(me.team) === 'attack') {
-      if (me.carrying) return this.siteAt(me.pos) ? 'Hold [4] to plant the seed here' : 'You have the seed! Bring it to A or B';
+      if (me.carrying) return this.siteAt(me.pos) ? 'Hold [4] to plant the Boo-Boo here' : 'You have the Boo-Boo! Bring it to A or B';
       if (b.state === 'dropped') return this.seedForMe && !me.hadSeed
-        ? 'Your seed is on the ground. Walk over it to pick it up!'
-        : 'The seed was dropped. Walk over it to pick it up!';
+        ? 'Your Boo-Boo is on the ground. Walk over it to pick it up!'
+        : 'The Boo-Boo was dropped. Walk over it to pick it up!';
       if (b.state === 'planted') return 'Keep the enemy away from the tree until it blooms!';
       return `Go with your team to site ${this.planSite}`;
     }
     if (b.state === 'planted') {
-      return flatDist(me.pos, b.pos) <= BOOBOO.uprootReach ? 'Hold [4] to chainsaw the tree down' : `The seed is planted on ${this.plantedSite}! Go uproot it`;
+      return flatDist(me.pos, b.pos) <= BOOBOO.uprootReach ? 'Hold [4] to chainsaw the tree down' : `The Boo-Boo is planted on ${this.plantedSite}! Go uproot it`;
     }
     return 'Guard sites A and B. Stop the enemy planting!';
   }
 
   actionFor(me) {
-    if (this.planter === me) return { label: 'Planting the seed…', frac: this.plantProgress / BOOBOO.plantTime };
+    if (this.planter === me) return { label: 'Planting the Boo-Boo…', frac: this.plantProgress / BOOBOO.plantTime };
     if (this.defuser === me) return { label: 'Cutting it down… VRRRM', frac: this.defuseProgress / BOOBOO.uprootTime };
     return null;
   }
@@ -650,7 +652,7 @@ class StandardMode {
       return out;
     }
     if (this.sideOf(me.team) === 'attack' && b.state === 'dropped')
-      out.push({ x: b.pos.x, y: b.pos.y + 1.2, z: b.pos.z, label: '✿ Seed', color: '#5fbf4a' });
+      out.push({ x: b.pos.x, y: b.pos.y + 1.2, z: b.pos.z, label: '✿ Boo-Boo', color: '#5fbf4a' });
     for (const [name, r] of Object.entries(this.sites)) {
       const c = siteCenter(r);
       const sub = this.sideOf(me.team) === 'attack' ? (me.carrying ? ' · plant' : '') : ' · guard';

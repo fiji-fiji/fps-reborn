@@ -653,7 +653,7 @@ class Viewmodel {
     return vm;
   }
 
-  // Left hand (painted nails, sleeve, bracelet) holding a soap bottle, used for refilling.
+  // Left hand (painted nails, sleeve, bracelet) holding a little silver teapot, used for refilling.
   _buildHand(vm) {
     const lam = (hex, o = {}) => new THREE.MeshLambertMaterial({ color: hex, ...o });
     // a big paw (white fur, pink beans + painted claws, gold bracelet) in a team sleeve
@@ -662,25 +662,41 @@ class Viewmodel {
     const nail = lam(0xff3d8b, { emissive: 0x551030 }), bean = lam(PAW.bean, { emissive: 0x3a1020 });
     const sleeve = new THREE.MeshLambertMaterial({ map: Textures.noisyTexture(0xffffff, 20, 8, 43), color: PAW.sleeve });
     const gold = lam(0xffd36b, { emissive: 0x403010 });
-    const bottleMat = lam(0xfff1a6, { emissive: 0x2a2410 });
-    const cap = lam(0xffffff);
+    const silver = lam(0xdfe4ec, { emissive: 0x2a3038 });
+    const corkMat = lam(0xff8fb1, { emissive: 0x401020 });
     const add = (...a) => this._box(...a);
 
     // hand = the wrist point. The forearm hangs off it and stays put;
-    // the grip (paw + bottle) turns around the wrist to pour.
+    // the grip (paw + teapot) turns around the wrist to pour.
     const hand = new THREE.Group();
     const grip = new THREE.Group();          // pivots at the wrist
     hand.add(grip);
-    const held = new THREE.Group();          // bottle + paw, centred on the bottle
+    const held = new THREE.Group();          // teapot + paw, centred on the pot
     held.position.set(0.047, 0.04, 0);
     grip.add(held);
 
+    // the teapot: a round-ish silver belly, a domed lid with a knob, a handle on the paw's
+    // side and a spout that curves up and out on the other (it points down when she tips it)
     const BW = 0.05;
-    add(held, BW, 0.085, BW, bottleMat, 0, 0, 0);
-    add(held, 0.022, 0.02, 0.022, cap, 0, 0.052, 0);
-    vm.spout = add(held, 0.012, 0.016, 0.012, cap, 0, 0.07, 0);
+    add(held, 0.078, 0.046, 0.078, silver, 0, -0.008, 0);
+    add(held, 0.064, 0.014, 0.064, silver, 0, 0.022, 0);
+    add(held, 0.05, 0.012, 0.05, silver, 0, -0.034, 0);                  // the foot
+    add(held, 0.044, 0.01, 0.044, silver, 0, 0.034, 0);                  // the lid
+    add(held, 0.012, 0.012, 0.012, gold, 0, 0.045, 0);                   // its knob
+    add(held, 0.01, 0.034, 0.012, silver, -0.047, -0.016, 0);            // the handle (under the paw)
+    add(held, 0.016, 0.008, 0.012, silver, -0.042, 0.004, 0);
+    add(held, 0.016, 0.008, 0.012, silver, -0.042, -0.034, 0);
+    const spout = add(held, 0.05, 0.014, 0.014, silver, 0.058, 0.014, 0);   // the spout, angled up and out
+    spout.rotation.z = 0.65;
+    vm.neck = new THREE.Vector3(0.079, 0.03, 0);                         // the spout's mouth, in held space
+    const cork = new THREE.Group();                                      // the little cork in the spout: pulled out
+    add(cork, 0.012, 0.012, 0.012, corkMat, 0, 0, 0);                    // with her teeth and spat away before the pour
+    add(cork, 0.016, 0.006, 0.016, corkMat, 0, 0.008, 0);
+    hand.add(cork);                                                      // (on the wrist, so it can go on its own)
+    vm.spoutCork = cork;
+    vm.corkHome2 = new THREE.Vector3(0.084, 0.036, 0);                   // sitting in the spout, in held space
     add(held, 0.036, 0.09, 0.074, skin, -BW / 2 - 0.016, -0.004, 0);   // the chubby paw
-    for (let i = 0; i < 4; i++) {                                       // fat toes round the bottle, beans + claws
+    for (let i = 0; i < 4; i++) {                                       // fat toes round the pot, beans + claws
       const y = 0.03 - i * 0.02;
       const len = i === 3 ? 0.042 : 0.05;
       const toe = new THREE.Group();                                    // turns at its base (the top one points)
@@ -701,6 +717,7 @@ class Viewmodel {
     add(arm, 0.075, 0.3, 0.075, sleeve, 0, -0.22, 0);
 
     hand.scale.setScalar(0.68);                       // the left hand is a bit smaller than the right
+    vm.mouth = new THREE.Vector3(0.01, -0.105, -0.27);   // where your mouth is (camera space): the spout comes up to it
     hand.visible = false;
     vm.group.add(hand);
     vm.hand = hand;
@@ -756,22 +773,26 @@ class Viewmodel {
     else if (!this.nadeKind) paw.visible = false;
   }
 
-  // Refill choreography, p = 0..1 through the refill:
-  //   hand comes in → tips the bottle → the spout docks on the glass (clink) → squeezes…
-  //   nothing comes out, harder, trembling… SPLURT! → pours → tips back → leaves
-  static get POUR_BURST() { return 0.52; }        // when the squeezed bottle finally lets go
+  // Refill choreography, p = 0..1 through the refill: the tea pour (the way mint tea is served,
+  // from way up high):
+  //   the paw brings the teapot up to your mouth → you bite the cork in the spout, the pot
+  //   tugs free, ptoo! you spit the cork out in front of you → the jar's lid floats off by
+  //   magic → she tips the pot over the glass → lifts it way up high while it pours, a long
+  //   thin stream falling into the glass from above → brings it back down → tips back →
+  //   the cork zips back into the spout, the lid settles, and she leaves
+  static get POUR_BITE() { return 0.15; }          // the teeth take the cork
+  static get POUR_SPIT() { return 0.22; }          // ptoo!
+  static get POUR_CORK_BACK() { return 0.87; }     // the cork's back in the spout
   static reloadPhases(p) {
-    const ease = t => t * t * (3 - 2 * t);
-    const clamp01 = t => Math.max(0, Math.min(1, t));
-    const B = Viewmodel.POUR_BURST;
-    const inT = ease(clamp01(p / 0.18));
-    const outT = ease(clamp01((p - 0.88) / 0.12));
-    const tilt = ease(clamp01((p - 0.16) / 0.12)) - ease(clamp01((p - 0.8) / 0.08));
-    const dock = ease(clamp01((p - 0.22) / 0.08)) - ease(clamp01((p - 0.8) / 0.06));   // spout on the glass
-    const squeeze = p < 0.3 ? 0 : p < B ? ease(clamp01((p - 0.3) / (B - 0.3))) : Math.max(0, 1 - (p - B) / 0.03);
-    const fill = 0.06 * ease(clamp01((p - 0.32) / (B - 0.32))) + 0.94 * ease(clamp01((p - B) / 0.26));   // a drip… then the lot
-    const pouring = p > B && p < 0.8;
-    return { reach: inT - outT, tilt, dock, squeeze, fill, pouring };
+    const inT = ease01(span(p, 0, 0.1));
+    const outT = ease01(span(p, 0.9, 1));
+    const mouth = ease01(span(p, 0, 0.1)) * (1 - ease01(span(p, 0.23, 0.33)));   // the spout at your mouth
+    const tilt = ease01(span(p, 0.3, 0.4)) - ease01(span(p, 0.8, 0.86));
+    const dock = ease01(span(p, 0.25, 0.35)) - ease01(span(p, 0.84, 0.9));      // the spout held over the glass
+    const high = ease01(span(p, 0.42, 0.58)) - ease01(span(p, 0.66, 0.78));     // way up high, and back down
+    const pouring = p > 0.38 && p < 0.8;
+    const fill = ease01(span(p, 0.38, 0.8));
+    return { reach: inT - outT, mouth, tilt, dock, fill, pouring, high };
   }
 
   // Hold a grenade instead of a blaster (kind = null to go back to the blaster).
@@ -918,24 +939,24 @@ class Viewmodel {
     g.rotation.x += this.sassy.wobble * 0.4;
     if (sassy) this.sassy.play(this.reloadStyle, t, dt, vm);
     else this.sassy.hide(reloading ? dt : 0);
-    // the soap pour: she lifts one claw off the bottle and the lid levitates up off the glass,
+    // the jar's lid: she lifts one claw off the pot and the lid levitates up off the glass,
     // hovers aside, wobbling, while she pours… and floats back down with a clink
     if (vm.pointer) vm.pointer.rotation.z = 0;
     if (reloading && !sassy && vm.cork && vm.pointer) {
       const lastP = this._pourT || 0, at = x => lastP < x && t >= x;
-      vm.pointer.rotation.z = 2.5 * ease01(span(t, 0.08, 0.15)) * (1 - ease01(span(t, 0.84, 0.9)));
-      const up = ease01(span(t, 0.13, 0.25)) * (1 - ease01(span(t, 0.8, 0.88)));
+      vm.pointer.rotation.z = 2.5 * ease01(span(t, 0.24, 0.3)) * (1 - ease01(span(t, 0.86, 0.92)));
+      const up = ease01(span(t, 0.27, 0.37)) * (1 - ease01(span(t, 0.82, 0.9)));
       const c = vm.cork;
       c.position.copy(vm.corkHome).add(this._v.set((vm.vessel.neckR + 0.05) * up, (0.08 + 0.006 * Math.sin(t * 14)) * up, -0.01 * up));
       c.rotation.set(0.3 * up * Math.sin(t * 6), 5 * t * up, 0.25 * up + 0.12 * up * Math.cos(t * 5));
       g.updateMatrixWorld(true);
-      if (at(0.13)) { Sound.clink(0.35); this.sassy._spark(g.localToWorld(vm.corkHome.clone()), 5); }
-      for (const x of [0.2, 0.34, 0.48, 0.62]) if (at(x)) {          // a little magic off her claw
+      if (at(0.27)) { Sound.clink(0.35); this.sassy._spark(g.localToWorld(vm.corkHome.clone()), 5); }
+      for (const x of [0.33, 0.48, 0.62, 0.74]) if (at(x)) {          // a little magic off her claw
         vm.pointer.updateMatrixWorld(true);
         this.sassy._spark(vm.pointer.localToWorld(this._v.set(0.05, 0, 0.014)).clone(), 2);
         this.sassy._spark(c.getWorldPosition(this._v).clone(), 2);
       }
-      if (at(0.88)) { Sound.clink(0.7); this.sassy._bump(1); }
+      if (at(0.9)) { Sound.clink(0.7); this.sassy._bump(1); }
     }
 
     vm.hand.visible = reloading && ph.reach > 0.001;
@@ -944,42 +965,73 @@ class Viewmodel {
     const lastT = this._pourT || 0;
     this._pourT = reloading && !sassy ? t : 0;
     if (vm.hand.visible) {
+      const at = x => lastT < x && t >= x;
+      const BITE = Viewmodel.POUR_BITE, SPIT = Viewmodel.POUR_SPIT, BACK = Viewmodel.POUR_CORK_BACK;
       vm.hand.position.lerpVectors(vm.handAway, vm.handPour, ph.reach);
       vm.grip.rotation.z = vm.pourTilt * ph.tilt;
-      const sq = ph.squeeze;                            // the paw squeezes the bottle
-      vm.held.scale.set(1 - 0.066 * sq, 1 + 0.02 * sq, 1 - 0.03 * sq);
-      // the spout rests right on top of the glass
+      // where the spout goes: your mouth first (the cork comes out with your teeth), then over
+      // the glass: close at first, then way up high (the tea pour)
       const top = this._v2 || (this._v2 = new THREE.Vector3());
-      const lift = ph.pouring ? 0.075 * Math.min(1, (t - Viewmodel.POUR_BURST) / 0.04) * Math.min(1, (0.8 - t) / 0.04) : 0;
-      top.set(0, vm.jarTopY + 0.002 + lift, JAR.z);       // (lifted a little while it pours, to see the stream)
-      if (ph.dock > 0) {
+      top.set(0, vm.jarTopY + 0.02 + 0.26 * ph.high, JAR.z);
+      g.updateMatrixWorld(true);
+      const mouth = g.worldToLocal(this.camera.localToWorld(vm.mouth.clone()));   // (its own vector: _v is used below)
+      const tug = Math.sin(Math.PI * span(t, BITE - 0.03, BITE + 0.03));     // a tug: the pot pulls, the cork holds
+      mouth.z += 0.012 * tug + 0.03 * ease01(span(t, BITE, SPIT));           // ...then the pot comes away, cork out
+      mouth.y -= 0.004 * tug + 0.015 * ease01(span(t, BITE, SPIT));
+      const amount = Math.min(1, ph.mouth + ph.dock);
+      if (amount > 0) {
+        const target = mouth.multiplyScalar(ph.mouth).addScaledVector(top, ph.dock).divideScalar(ph.mouth + ph.dock);
+        const tip = g.worldToLocal(vm.held.localToWorld(this._v.copy(vm.neck)));
+        vm.hand.position.addScaledVector(target.sub(tip), amount);
+      }
+      if (ph.high > 0.98) {                             // holding it up there: a steady hand, almost
+        vm.hand.position.x += Math.sin(t * 90) * 0.0015;
+        vm.hand.position.z += Math.sin(t * 73 + 1) * 0.001;
+      }
+      // the spout's cork: in the spout, then held in your teeth, spat out in front of you,
+      // and it zips back into the spout at the end
+      const cork = vm.spoutCork;
+      const home = this._v3 || (this._v3 = new THREE.Vector3());
+      home.copy(vm.corkHome2).add(vm.held.position).applyEuler(vm.grip.rotation);   // in the spout (hand space)
+      const u = span(t, SPIT, SPIT + 0.3);
+      if (t < BITE || t >= BACK) {
+        cork.visible = true;
+        cork.position.copy(home);
+        cork.rotation.copy(vm.grip.rotation);
+      } else if (t < SPIT) {                            // in your teeth: stays at your mouth while the pot pulls away
+        cork.visible = true;
         g.updateMatrixWorld(true);
-        const tip = g.worldToLocal(vm.held.localToWorld(this._v.set(0, 0.078, 0)));
-        vm.hand.position.addScaledVector(tip.sub(top).negate(), ph.dock);
-      }
-      if (sq > 0 && t < Viewmodel.POUR_BURST) {         // harder… harder… trembling
-        vm.hand.position.x += Math.sin(t * 260) * 0.0012 * sq;
-        vm.hand.position.y += Math.sin(t * 337 + 1) * 0.0009 * sq;
-      }
-      const at = x => lastT < x && t >= x;
-      if (at(0.3)) { Sound.clink(0.7); this.sassy._bump(0.8); }
-      if (at(Viewmodel.POUR_BURST)) {                   // SPLURT!
-        Sound.plop(); Sound.clink();
-        this.sassy._bump(2);
+        cork.position.copy(vm.hand.worldToLocal(this.camera.localToWorld(this._v.copy(vm.mouth))));
+        cork.position.y += 0.004 * Math.sin(t * 50);
+        cork.rotation.set(0.4, 0, 0.2);
+      } else if (u < 1) {                               // ptoo! away it flies, tumbling, and drops
+        cork.visible = true;
+        const f = this._corkFrom || (this._corkFrom = cork.position.clone());
+        cork.position.set(f.x + 0.06 * u, f.y + 0.1 * u - 0.5 * u * u, f.z - 1.1 * u);
+        cork.rotation.set(14 * u, 3 * u, 8 * u);
+      } else cork.visible = false;
+      if (t < BITE || t >= BACK) this._corkFrom = null;
+      if (at(BITE)) { Sound.corkPop(); this.sassy._bump(0.6); }
+      if (at(SPIT)) {
+        Sound.spit(); this.sassy._bump(0.3);
         g.updateMatrixWorld(true);
-        this.sassy._spark(g.localToWorld(top.clone()), 8, 'water');
+        this.sassy._spark(vm.hand.localToWorld(cork.position.clone()), 4);
       }
-      if (ph.pouring && Math.random() < 0.25) Sound.pour(0.8);
+      if (at(BACK)) { Sound.tick(1.4); g.updateMatrixWorld(true); this.sassy._spark(vm.hand.localToWorld(home.clone()), 4); }
+      if (at(0.38)) { Sound.plop(); this.sassy._bump(0.5); }   // the first of it lands
       if (ph.pouring) {
+        if (Math.random() < 0.25) Sound.pour(0.7 + 0.5 * ph.high);
         g.updateMatrixWorld(true);
-        const s = vm.spout.getWorldPosition(this._v);
-        g.worldToLocal(s);
+        const s = g.worldToLocal(vm.held.localToWorld(this._v.copy(vm.neck)));
         const len = s.y - vm.jarTopY;
-        if (len > 0.005) {
+        if (len > 0.005) {                              // the stream: thinner the longer it falls, swaying a little
           vm.stream.visible = true;
           vm.stream.position.copy(s);
-          vm.stream.scale.y = len;
+          vm.stream.position.x += Math.sin(t * 60) * 0.004 * ph.high;
+          vm.stream.scale.set(1 / (1 + len * 4), len, 1 / (1 + len * 4));
         }
+        if (Math.random() < 0.15 + 0.5 * ph.high)       // the splash where it lands
+          this.sassy._spark(g.localToWorld(this._v.set(0, vm.jarTopY + 0.005, JAR.z)), 1 + Math.round(ph.high * 2), 'water');
       }
     }
   }

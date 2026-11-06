@@ -51,7 +51,7 @@ const HUD = {
     this.bannerLeft = 0;
     this.flashHintLeft = 0;
     this.gainLeft = 0;
-    this.popChain = 0; this.popAt = -99; this.roundPops = 0;   // (rounds: set by newRound, before and after this)
+    this.pops = 0;                                   // your pops this round (the pop hat's stars)
     this.markerEls = [];
     this.el.score.style.display = game.mode.hud() ? 'flex' : 'none';
   },
@@ -99,16 +99,13 @@ const HUD = {
     if (attacker && attacker.isPlayer && victim.team !== attacker.team) this.popBanner(victim, head);
   },
 
-  // Your pops: your hat pops up at the bottom of the screen with a star on it (pophat.js),
-  // one star more for each pop in quick succession (within 8 s of the last), five for an ace
-  // (all five in a round). main.js gives us the hat (HUD.popHat).
-  newRound() { this.roundPops = 0; this.popChain = 0; this.rounds = true; },
+  // Your pops: your hat pops up at the bottom of the screen with your pops on it as stars
+  // (pophat.js): one star for your first pop of the round, two for the second… five for an ace.
+  // The count starts over each round (not with time). main.js gives us the hat (HUD.popHat).
+  newRound() { this.pops = 0; },
   popBanner(victim, head) {
-    const now = performance.now() / 1000;
-    this.popChain = now - this.popAt < 8 ? this.popChain + 1 : 1;
-    this.popAt = now;
-    this.roundPops++;
-    const n = this.rounds && this.roundPops === 5 ? 5 : Math.min(this.popChain, 5);
+    this.pops++;
+    const n = Math.min(this.pops, 5);
     if (this.popHat) this.popHat.show(n);
     if (n > 1) Sound.multiPop(n);
   },
@@ -287,7 +284,7 @@ const HUD = {
     if (me.slot === 'seed') {
       this.el.ammo.textContent = '✿';
       this.el.reserve.textContent = '1';
-      this.el.weaponName.textContent = 'The seed';
+      this.el.weaponName.textContent = 'The Boo-Boo';
       this.el.ammoLabel.innerHTML = keysToHtml('Hold [4] on A or B to plant');
     } else if (me.slot === 'knife') {
       this.el.ammo.textContent = '∞';
@@ -314,7 +311,7 @@ const HUD = {
       .filter(([s]) => me.guns[s])
       .map(([s, k]) => `<div class="slot${me.slot === s ? ' on' : ''}">${keysToHtml(`[${k}]`)} ${me.guns[s].def.name}</div>`)
       .join('')
-      + (me.carrying ? `<div class="slot${me.slot === 'seed' ? ' on' : ''}">${keysToHtml('[4]')} ✿ Seed</div>` : '')
+      + (me.carrying ? `<div class="slot${me.slot === 'seed' ? ' on' : ''}">${keysToHtml('[4]')} ✿ Boo-Boo</div>` : '')
       + (nadeText ? `<div class="slot${me.slot === 'nade' ? ' on' : ''}">${keysToHtml('[5]')} ${nadeText}</div>` : '');
     if (slotsHtml !== this._lastSlots) { this.el.slots.innerHTML = slotsHtml; this._lastSlots = slotsHtml; }
 

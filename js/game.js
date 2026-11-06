@@ -92,7 +92,7 @@ class PlayerAgent {
 }
 
 class Game {
-  // modeName: 'standard' | 'swiftplay' | 'skirmish' (maps without team spawns use practice)
+  // modeName: 'standard' | 'swiftplay' | 'skirmish' | 'duel' (1v1) (maps without team spawns use practice)
   // net (LAN play, see net.js): { role: 'host'|'guest', myId, players: [{ id, name, team }], noBots }
   constructor({ scene, world, mapInfo, effects, camera, difficulty = 'easy', modeName = 'standard', net = null }) {
     Object.assign(this, { scene, world, mapInfo, effects, camera });
@@ -135,8 +135,9 @@ class Game {
       if (!net) {
         this.nav = new NavGrid(world, mapInfo.spawn.y);
         let seed = 1;
+        const teamSize = modeName === 'duel' ? 1 : 5;          // 1v1: just you and one cat
         for (const team of ['blue', 'red']) {
-          BOT_NAMES[team].forEach((name, i) => {
+          BOT_NAMES[team].slice(0, team === this.playerTeam ? teamSize - 1 : teamSize).forEach((name, i) => {
             const shirt = TEAM_SHIRTS[team][(i + (team === this.playerTeam ? 1 : 0)) % 5];
             const bot = new Bot(this, name, team, shirt, difficulty, seed++);
             this.bots.push(bot);
@@ -153,7 +154,7 @@ class Game {
         });
       }
       this.mode = modeName === 'skirmish' ? new SkirmishMode(this)
-        : new StandardMode(this, modeName === 'swiftplay' ? SWIFTPLAY : {});
+        : new StandardMode(this, modeName === 'swiftplay' ? SWIFTPLAY : modeName === 'duel' ? DUEL : {});
     } else {
       this.mode = new PracticeMode(this);
     }

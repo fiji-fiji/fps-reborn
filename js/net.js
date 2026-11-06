@@ -569,7 +569,7 @@ class NetGuest {
       Object.assign(me.nades, p.n);
       if (p.bl > 0.2 && p.bl > me.blindUntil - t + 0.3) HUD.dazzle(p.bl);
       me.blindUntil = t + p.bl;
-      if (p.ca && !me.carrying) { HUD.flashHint('You picked up the seed!'); Sound.pickup(); }
+      if (p.ca && !me.carrying) { HUD.flashHint('You picked up the Boo-Boo!'); Sound.pickup(); }
       me.carrying = !!p.ca;
       if (g.mode.kind === 'skirmish' && !me.alive && p.rs > 0) me.respawnIn = p.rs;
     }
@@ -594,7 +594,7 @@ class NetGuest {
       refillLoadout(me);
       const mySide = m.sideOf(g.playerTeam), R = m.rules;
       const halftime = sm.r === R.half + 1;
-      let sub = mySide === 'attack' ? 'Your team ATTACKS: plant the seed on A or B' : 'Your team DEFENDS: stop them planting the seed';
+      let sub = mySide === 'attack' ? 'Your team ATTACKS: plant the Boo-Boo on A or B' : 'Your team DEFENDS: stop them planting the Boo-Boo';
       if (halftime) sub = 'Halftime! Teams switched sides. ' + sub;
       if (!first) HUD.banner(`ROUND ${sm.r}`, sub, 4);
       if (halftime) HUD.openShopSoon();
@@ -622,7 +622,7 @@ class NetGuest {
         m.plantAnim.finish();
         b.plant(new THREE.Vector3(...sm.bp));
         const att = m.sideOf(g.playerTeam) === 'attack';
-        HUD.banner(`SEED PLANTED ON ${sm.ps}`, att ? 'Protect the tree until it blooms!' : 'Go uproot it before it blooms!', 3, '#7fffd4');
+        HUD.banner(`BOO-BOO PLANTED ON ${sm.ps}`, att ? 'Protect the tree until it blooms!' : 'Go uproot it before it blooms!', 3, '#7fffd4');
         Sound.planted();
       }
     }

@@ -27,7 +27,7 @@
 //   open like a jewellery box and claps shut · snap: leaves the lid alone, it's all in the snap
 //
 // SECONDARY refills, parked for now (they don't play; we'll come back to them):
-//   pour   — the classic soap-bottle pour (in weapons.js)
+//   pour   — PLAYS: the tea pour (in weapons.js): pops the bottle's cap, pours from way up high
 //   file   — files her nails, checks them, flicks her wrist
 //   polish — paints one nail a fresh colour and admires it
 //   drum   — drums her nails on the jar, then thumbs up
@@ -41,9 +41,9 @@ const PRIMARY_REFILLS = ['fumble', 'ribbon', 'orbit', 'rain', 'yoyo', 'whirl', '
 const SECONDARY_REFILLS = ['pour', 'file', 'polish', 'drum', 'peace', 'shades', 'knock', 'poke', 'cork'];
 const SASSY_STYLES = [...PRIMARY_REFILLS, ...SECONDARY_REFILLS].filter(st => st !== 'pour');   // every show the paw does
 // How often each show comes up in matches, from the ranking (0 = doesn't play, but kept).
-// Picked: fumble, ribbon, orbit, whirl, snap, pour, all equally often. Tossed: file, polish.
+// Picked: fumble, orbit, snap, pour, all equally often. Parked for now: ribbon, whirl. Tossed: file, polish.
 const REFILL_WEIGHTS = {
-  fumble: 1, ribbon: 1, orbit: 1, rain: 0, yoyo: 0, whirl: 1, wand: 0, dribble: 0, lasso: 0, pearls: 0, snap: 1,
+  fumble: 1, ribbon: 0, orbit: 1, rain: 0, yoyo: 0, whirl: 0, wand: 0, dribble: 0, lasso: 0, pearls: 0, snap: 1,
   pour: 1, file: 0, polish: 0, drum: 0, peace: 0, shades: 0, knock: 0, poke: 0, cork: 0,
 };
 
